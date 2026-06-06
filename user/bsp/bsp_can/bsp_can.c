@@ -30,11 +30,6 @@ void bsp_can_init(void)
     HAL_CAN_Start(&hcan2);
 }
 
-void bsp_can_register_rx_cb(CAN_HandleTypeDef *hcan, bsp_can_rx_cb_t cb)
-{
-    if      (hcan->Instance == CAN1) s_can1_rx_cb = cb;
-    else if (hcan->Instance == CAN2) s_can2_rx_cb = cb;
-}
 
 uint8_t bsp_can_send(CAN_HandleTypeDef *hcan, uint16_t id, uint8_t *data, uint8_t len)
 {

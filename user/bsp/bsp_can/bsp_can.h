@@ -1,7 +1,10 @@
 #ifndef BSP_CAN_H
 #define BSP_CAN_H
 
-#include "can.h"
+#include "stm32f4xx_hal.h"
+
+extern CAN_HandleTypeDef hcan1;
+extern CAN_HandleTypeDef hcan2;
 
 void bsp_can_init(void);
 uint8_t bsp_can_send(CAN_HandleTypeDef *hcan, uint16_t id, uint8_t *data, uint8_t len);

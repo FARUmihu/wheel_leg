@@ -1,0 +1,6 @@
+../user/bsp/bsp_can/bsp_can.c:3:6:bsp_can_init	1
+../user/bsp/bsp_can/bsp_can.c:34:9:bsp_can_send	1
+../user/bsp/bsp_can/bsp_can.c:48:13:bsp_can1_rx_callback	1
+../user/bsp/bsp_can/bsp_can.c:49:13:bsp_can2_rx_callback	1
+../user/bsp/bsp_can/bsp_can.c:51:13:can_rx_dispatch	4
+../user/bsp/bsp_can/bsp_can.c:63:6:HAL_CAN_RxFifo0MsgPendingCallback	1

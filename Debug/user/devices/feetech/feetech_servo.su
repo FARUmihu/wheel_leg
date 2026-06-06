@@ -1,0 +1,10 @@
+../user/devices/feetech/feetech_servo.c:18:13:uart_send	16	static
+../user/devices/feetech/feetech_servo.c:24:12:uart_recv	16	static
+../user/devices/feetech/feetech_servo.c:30:13:uart_flush	16	static
+../user/devices/feetech/feetech_servo.c:37:13:send_write	56	static
+../user/devices/feetech/feetech_servo.c:65:6:feetech_servo_init	4	static
+../user/devices/feetech/feetech_servo.c:71:6:feetech_servo_enable	24	static
+../user/devices/feetech/feetech_servo.c:77:6:feetech_servo_disable	24	static
+../user/devices/feetech/feetech_servo.c:83:6:feetech_servo_set_pos	32	static
+../user/devices/feetech/feetech_servo.c:98:6:feetech_servo_sync_set_pos	72	static
+../user/devices/feetech/feetech_servo.c:143:5:feetech_servo_update	56	static
