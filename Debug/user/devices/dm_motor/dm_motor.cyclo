@@ -7,5 +7,4 @@
 ../user/devices/dm_motor/dm_motor.c:78:9:dm_motor_send_mit	1
 ../user/devices/dm_motor/dm_motor.c:115:13:dm_motor_decode	1
 ../user/devices/dm_motor/dm_motor.c:135:13:dm_rx_dispatch	4
-../user/devices/dm_motor/dm_motor.c:145:6:bsp_can1_rx_callback	1
-../user/devices/dm_motor/dm_motor.c:150:6:bsp_can2_rx_callback	1
+../user/devices/dm_motor/dm_motor.c:147:6:bsp_can2_rx_callback	1

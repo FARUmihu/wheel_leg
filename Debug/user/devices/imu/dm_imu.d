@@ -1,4 +1,5 @@
-Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
+user/devices/imu/dm_imu.o: ../user/devices/imu/dm_imu.c \
+ ../user/devices/imu/dm_imu.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
  ../Core/Inc/stm32f4xx_hal_conf.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h \
@@ -28,11 +29,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/can.h ../Core/Inc/main.h ../Core/Inc/dma.h ../Core/Inc/tim.h \
- ../Core/Inc/usart.h ../Core/Inc/gpio.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h
-../Core/Inc/main.h:
+ C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h
+../user/devices/imu/dm_imu.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h:
@@ -62,11 +60,4 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
-../Core/Inc/can.h:
-../Core/Inc/main.h:
-../Core/Inc/dma.h:
-../Core/Inc/tim.h:
-../Core/Inc/usart.h:
-../Core/Inc/gpio.h:
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h:
-C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h:

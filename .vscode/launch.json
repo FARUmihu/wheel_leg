@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug (OpenOCD + ST-Link)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "executable": "${workspaceFolder}/Debug/wheel_leg.elf",
+            "configFiles": [
+                "C:/Users/FMI/Downloads/openocd-v0.12.0-i686-w64-mingw32/share/openocd/scripts/interface/stlink.cfg",
+                "C:/Users/FMI/Downloads/openocd-v0.12.0-i686-w64-mingw32/share/openocd/scripts/target/stm32f4x.cfg"
+            ],
+            "openOCDPath": "C:/Users/FMI/Downloads/openocd-v0.12.0-i686-w64-mingw32/bin/openocd.exe",
+            "gdbPath": "D:/ES/STM32CubeCLT_1.21.0/GNU-tools-for-STM32/bin/arm-none-eabi-gdb.exe",
+            "svdFile": "D:/ES/STM32CubeCLT_1.21.0/STMicroelectronics_CMSIS_SVD/STM32F407.svd",
+            "device": "STM32F407VE",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "preLaunchTask": "Build"
+        }
+    ]
+}

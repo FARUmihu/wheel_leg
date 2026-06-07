@@ -30,3 +30,4 @@
 "./user/bsp/bsp_can/bsp_can.o"
 "./user/devices/dm_motor/dm_motor.o"
 "./user/devices/feetech/feetech_servo.o"
+"./user/devices/imu/dm_imu.o"

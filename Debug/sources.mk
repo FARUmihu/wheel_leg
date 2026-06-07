@@ -28,4 +28,5 @@ Drivers/STM32F4xx_HAL_Driver/Src \
 user/bsp/bsp_can \
 user/devices/dm_motor \
 user/devices/feetech \
+user/devices/imu \
 

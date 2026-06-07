@@ -9,6 +9,7 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include user/devices/imu/subdir.mk
 -include user/devices/feetech/subdir.mk
 -include user/devices/dm_motor/subdir.mk
 -include user/bsp/bsp_can/subdir.mk

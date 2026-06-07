@@ -1,6 +1,6 @@
 #include "dm_motor.h"
 
-dm_motor_t g_dm_motors[4];
+extern dm_motor_t g_dm_motors[4];
 
 /* ── 定点 ↔ 浮点 转换 ──────────────────────────────────────────── */
 
@@ -142,10 +142,7 @@ static void dm_rx_dispatch(CAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
     }
 }
 
-void bsp_can1_rx_callback(uint32_t id, uint8_t *data, uint8_t len)
-{
-    dm_rx_dispatch(&hcan1, id, data);
-}
+/* CAN1 归 IMU 使用，此处不覆盖 bsp_can1_rx_callback */
 
 void bsp_can2_rx_callback(uint32_t id, uint8_t *data, uint8_t len)
 {
