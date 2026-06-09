@@ -33,6 +33,19 @@
 #define DM3510_T_MIN   -4.0f
 
 /* ================================================================
+ * 电机逻辑索引与 CAN ID
+ * ================================================================ */
+#define DM_MOTOR_LEFT_JOINT_IDX    0
+#define DM_MOTOR_RIGHT_JOINT_IDX   1
+#define DM_MOTOR_LEFT_WHEEL_IDX    2
+#define DM_MOTOR_RIGHT_WHEEL_IDX   3
+
+#define DM_MOTOR_LEFT_JOINT_ID     1
+#define DM_MOTOR_LEFT_WHEEL_ID     2
+#define DM_MOTOR_RIGHT_JOINT_ID    4
+#define DM_MOTOR_RIGHT_WHEEL_ID    5
+
+/* ================================================================
  * 电机实例结构体（DM4310 / DM3510 共用）
  * ================================================================ */
 typedef struct {

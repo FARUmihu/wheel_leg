@@ -97,9 +97,11 @@ int main(void)
   MX_TIM6_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  dm_motor_init(&g_dm_motors[0], &hcan2, 1, 10, -10, 5, -5);
+  dm_motor_init(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX], &hcan2,
+                DM_MOTOR_LEFT_JOINT_ID,
+                DM4310_V_MAX, DM4310_V_MIN, DM4310_T_MAX, DM4310_T_MIN);
   bsp_can_init();
-  dm_motor_enable(&g_dm_motors[0]);
+  dm_motor_enable(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX]);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -107,7 +109,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  dm_motor_send_mit(&g_dm_motors[0], 0, 0,
+	  dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX], 0, 0,
 	                            0, 0, 0);
 	  HAL_Delay(10);
     /* USER CODE BEGIN 3 */

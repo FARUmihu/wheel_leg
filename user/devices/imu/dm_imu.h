@@ -8,7 +8,7 @@
  * IMU_CAN_ID : IMU 自身的 CAN ID（出厂默认 0x01，可通过上位机修改）
  * IMU_MST_ID : STM32 的 CAN ID（IMU 向此 ID 回复数据）
  * ────────────────────────────────────────────────────────────── */
-#define IMU_CAN_ID  0x01
+#define IMU_CAN_ID  0x06
 #define IMU_MST_ID  0x00
 
 /* ── 数据量程（来自 DM-IMU 手册）────────────────────────────── */

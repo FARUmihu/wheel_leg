@@ -11,8 +11,8 @@
 #define FEETECH_HUART  huart1   /* CubeMX 配置好 USART 后改为实际句柄名 */
 
 /* ── 舵机 ID ─────────────────────────────────────────────────── */
-#define FEETECH_ID_LEFT   1
-#define FEETECH_ID_RIGHT  2
+#define FEETECH_ID_LEFT   0
+#define FEETECH_ID_RIGHT  3
 
 /* ── 位置量程（步，0~1023 对应 0°~300°，512 为中位）────────── */
 #define FEETECH_POS_MIN  0
