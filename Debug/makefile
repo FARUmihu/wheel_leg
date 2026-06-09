@@ -13,6 +13,7 @@ RM := rm -rf
 -include user/devices/feetech/subdir.mk
 -include user/devices/dm_motor/subdir.mk
 -include user/bsp/bsp_can/subdir.mk
+-include user/app/subdir.mk
 -include user/algorithm/PID/subdir.mk
 -include user/algorithm/Kalman/subdir.mk
 -include Drivers/STM32F4xx_HAL_Driver/Src/subdir.mk

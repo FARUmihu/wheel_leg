@@ -1,0 +1,4 @@
+../user/app/app.c:12:6:app_init	1
+../user/app/app.c:36:6:app_control_2khz	2
+../user/app/app.c:45:6:app_background	2
+../user/app/app.c:54:6:HAL_TIM_PeriodElapsedCallback	2

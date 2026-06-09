@@ -26,8 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "bsp_can.h"
-#include "dm_motor.h"
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,7 +47,6 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-dm_motor_t g_dm_motors[4];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,11 +95,8 @@ int main(void)
   MX_TIM6_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  dm_motor_init(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX], &hcan2,
-                DM_MOTOR_LEFT_JOINT_ID,
-                DM4310_V_MAX, DM4310_V_MIN, DM4310_T_MAX, DM4310_T_MIN);
-  bsp_can_init();
-  dm_motor_enable(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX]);
+  app_init();
+  HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -109,9 +104,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX], 0, 0,
-	                            0, 0, 0);
-	  HAL_Delay(10);
+    app_background();
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

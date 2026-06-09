@@ -29,6 +29,7 @@
 "./Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.o"
 "./user/algorithm/Kalman/kalman_filter.o"
 "./user/algorithm/PID/pid.o"
+"./user/app/app.o"
 "./user/bsp/bsp_can/bsp_can.o"
 "./user/devices/dm_motor/dm_motor.o"
 "./user/devices/feetech/feetech_servo.o"
