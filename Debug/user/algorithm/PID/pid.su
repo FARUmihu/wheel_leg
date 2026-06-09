@@ -1,0 +1,3 @@
+../user/algorithm/PID/pid.c:32:6:PID_init	32	static
+../user/algorithm/PID/pid.c:48:7:PID_Calc	24	static
+../user/algorithm/PID/pid.c:86:6:PID_clear	16	static

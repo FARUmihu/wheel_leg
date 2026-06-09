@@ -25,6 +25,8 @@ SUBDIRS := \
 Core/Src \
 Core/Startup \
 Drivers/STM32F4xx_HAL_Driver/Src \
+user/algorithm/Kalman \
+user/algorithm/PID \
 user/bsp/bsp_can \
 user/devices/dm_motor \
 user/devices/feetech \
