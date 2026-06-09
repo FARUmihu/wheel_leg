@@ -8,6 +8,66 @@
 
 dm_motor_t g_dm_motors[4];
 volatile app_status_t g_app_status;
+volatile app_cmd_t g_app_cmd;
+volatile app_obs_t g_app_obs;
+
+_Static_assert(APP_DM_LEFT_JOINT == DM_MOTOR_LEFT_JOINT_IDX, "DM index mismatch");
+_Static_assert(APP_DM_RIGHT_JOINT == DM_MOTOR_RIGHT_JOINT_IDX, "DM index mismatch");
+_Static_assert(APP_DM_LEFT_WHEEL == DM_MOTOR_LEFT_WHEEL_IDX, "DM index mismatch");
+_Static_assert(APP_DM_RIGHT_WHEEL == DM_MOTOR_RIGHT_WHEEL_IDX, "DM index mismatch");
+
+static void app_cmd_set_defaults(void)
+{
+    g_app_cmd.mode = APP_MODE_IDLE;
+    g_app_cmd.dm_send_mask = 0U;
+    g_app_cmd.dm_enable_mask = 0U;
+    g_app_cmd.ft_write_mask = 0U;
+    g_app_cmd.ft_read_mask = 0U;
+    g_app_cmd.imu_request_once = 0U;
+
+    for (uint8_t i = 0; i < APP_DM_COUNT; i++) {
+        g_app_cmd.dm[i].p = 0.0f;
+        g_app_cmd.dm[i].v = 0.0f;
+        g_app_cmd.dm[i].kp = 0.0f;
+        g_app_cmd.dm[i].kd = 0.0f;
+        g_app_cmd.dm[i].t = 0.0f;
+    }
+
+    for (uint8_t i = 0; i < APP_FT_COUNT; i++) {
+        g_app_cmd.ft[i].pos = FEETECH_POS_MID;
+        g_app_cmd.ft[i].speed = 0U;
+        g_app_cmd.ft[i].acc = 0U;
+    }
+}
+
+static void app_obs_update(void)
+{
+    for (uint8_t i = 0; i < APP_DM_COUNT; i++) {
+        g_app_obs.dm[i].err = g_dm_motors[i].err;
+        g_app_obs.dm[i].pos = g_dm_motors[i].pos;
+        g_app_obs.dm[i].vel = g_dm_motors[i].vel;
+        g_app_obs.dm[i].vel_filtered = g_dm_motors[i].vel_filtered;
+        g_app_obs.dm[i].torque = g_dm_motors[i].torque;
+        g_app_obs.dm[i].temp_mos = g_dm_motors[i].temp_mos;
+        g_app_obs.dm[i].temp_rotor = g_dm_motors[i].temp_rotor;
+    }
+
+    for (uint8_t i = 0; i < APP_FT_COUNT; i++) {
+        g_app_obs.ft[i].pos = g_ft_servos[i].pos;
+        g_app_obs.ft[i].speed = g_ft_servos[i].speed;
+        g_app_obs.ft[i].load = g_ft_servos[i].load;
+        g_app_obs.ft[i].voltage = g_ft_servos[i].voltage;
+        g_app_obs.ft[i].temp = g_ft_servos[i].temp;
+    }
+
+    g_app_obs.imu.pitch = g_imu.pitch;
+    g_app_obs.imu.roll = g_imu.roll;
+    g_app_obs.imu.yaw = g_imu.yaw;
+    for (uint8_t i = 0; i < 3U; i++) {
+        g_app_obs.imu.gyro[i] = g_imu.gyro[i];
+        g_app_obs.imu.accel[i] = g_imu.accel[i];
+    }
+}
 
 void app_init(void)
 {
@@ -27,6 +87,9 @@ void app_init(void)
     bsp_can_init();
     feetech_servo_init();
     imu_init();
+
+    app_cmd_set_defaults();
+    app_obs_update();
 
     g_app_status.control_ticks = 0;
     g_app_status.background_ticks = 0;
@@ -48,6 +111,7 @@ void app_background(void)
         return;
     }
 
+    app_obs_update();
     g_app_status.background_ticks++;
 }
 

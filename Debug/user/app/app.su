@@ -1,4 +1,6 @@
-../user/app/app.c:12:6:app_init	8	static
-../user/app/app.c:36:6:app_control_2khz	4	static
-../user/app/app.c:45:6:app_background	4	static
-../user/app/app.c:54:6:HAL_TIM_PeriodElapsedCallback	16	static
+../user/app/app.c:19:13:app_cmd_set_defaults	16	static
+../user/app/app.c:43:13:app_obs_update	16	static
+../user/app/app.c:72:6:app_init	8	static
+../user/app/app.c:99:6:app_control_2khz	4	static
+../user/app/app.c:108:6:app_background	8	static
+../user/app/app.c:118:6:HAL_TIM_PeriodElapsedCallback	16	static
