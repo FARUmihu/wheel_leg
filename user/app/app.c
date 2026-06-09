@@ -69,6 +69,61 @@ static void app_obs_update(void)
     }
 }
 
+static void app_run_dm_manual(void)
+{
+    uint8_t send_mask = g_app_cmd.dm_send_mask;
+
+    for (uint8_t i = 0; i < APP_DM_COUNT; i++) {
+        uint8_t bit = (uint8_t)(1U << i);
+
+        if ((send_mask & bit) == 0U) {
+            continue;
+        }
+
+        float p = g_app_cmd.dm[i].p;
+        float v = g_app_cmd.dm[i].v;
+        float kp = g_app_cmd.dm[i].kp;
+        float kd = g_app_cmd.dm[i].kd;
+        float t = g_app_cmd.dm[i].t;
+
+        dm_motor_send_mit(&g_dm_motors[i], p, v, kp, kd, t);
+    }
+}
+
+static void app_run_ft_manual(void)
+{
+    uint8_t write_mask = g_app_cmd.ft_write_mask;
+    uint8_t read_mask = g_app_cmd.ft_read_mask;
+
+    for (uint8_t i = 0; i < APP_FT_COUNT; i++) {
+        uint8_t bit = (uint8_t)(1U << i);
+
+        if ((write_mask & bit) != 0U) {
+            uint16_t pos = g_app_cmd.ft[i].pos;
+            uint16_t speed = g_app_cmd.ft[i].speed;
+            uint8_t acc = g_app_cmd.ft[i].acc;
+
+            feetech_servo_set_pos(g_ft_servos[i].id, pos, speed, acc);
+            g_app_cmd.ft_write_mask = (uint8_t)(g_app_cmd.ft_write_mask & (uint8_t)(~bit));
+        }
+
+        if ((read_mask & bit) != 0U) {
+            feetech_servo_update(i);
+            g_app_cmd.ft_read_mask = (uint8_t)(g_app_cmd.ft_read_mask & (uint8_t)(~bit));
+        }
+    }
+}
+
+static void app_run_imu_read(void)
+{
+    if (g_app_cmd.imu_request_once == 0U) {
+        return;
+    }
+
+    imu_request_data();
+    g_app_cmd.imu_request_once = 0U;
+}
+
 void app_init(void)
 {
     dm_motor_init(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX], &hcan2,
@@ -102,6 +157,10 @@ void app_control_2khz(void)
         return;
     }
 
+    if (g_app_cmd.mode == APP_MODE_DM_MANUAL) {
+        app_run_dm_manual();
+    }
+
     g_app_status.control_ticks++;
 }
 
@@ -109,6 +168,17 @@ void app_background(void)
 {
     if (g_app_status.initialized == 0U) {
         return;
+    }
+
+    switch (g_app_cmd.mode) {
+        case APP_MODE_FT_MANUAL:
+            app_run_ft_manual();
+            break;
+        case APP_MODE_IMU_READ:
+            app_run_imu_read();
+            break;
+        default:
+            break;
     }
 
     app_obs_update();

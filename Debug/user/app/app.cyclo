@@ -1,6 +1,9 @@
 ../user/app/app.c:19:13:app_cmd_set_defaults	3
 ../user/app/app.c:43:13:app_obs_update	4
-../user/app/app.c:72:6:app_init	1
-../user/app/app.c:99:6:app_control_2khz	2
-../user/app/app.c:108:6:app_background	2
-../user/app/app.c:118:6:HAL_TIM_PeriodElapsedCallback	2
+../user/app/app.c:72:13:app_run_dm_manual	3
+../user/app/app.c:93:13:app_run_ft_manual	4
+../user/app/app.c:117:13:app_run_imu_read	2
+../user/app/app.c:127:6:app_init	1
+../user/app/app.c:154:6:app_control_2khz	3
+../user/app/app.c:167:6:app_background	4
+../user/app/app.c:188:6:HAL_TIM_PeriodElapsedCallback	2
