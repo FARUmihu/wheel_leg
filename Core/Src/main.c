@@ -27,7 +27,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app.h"
-#include "feetech_servo.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,8 +96,6 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   app_init();
-  feetech_servo_enable(FEETECH_ID_RIGHT);
-  HAL_Delay(100);
   HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END 2 */
 
@@ -106,13 +103,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    for(uint16_t x = 200; x < 400; x += 50){
-      feetech_servo_set_pos(FEETECH_ID_RIGHT, x, 200, 20);
-      HAL_Delay(300);
-    }
-    app_background();
     /* USER CODE END WHILE */
-
+    app_background();
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
