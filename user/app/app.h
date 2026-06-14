@@ -5,6 +5,7 @@
 
 #define APP_DM_COUNT  4
 #define APP_FT_COUNT  2
+#define APP_LEG_COUNT 2
 
 typedef enum {
     APP_MODE_IDLE = 0,
@@ -24,6 +25,11 @@ typedef enum {
     APP_FT_LEFT = 0,
     APP_FT_RIGHT,
 } app_ft_index_t;
+
+typedef enum {
+    APP_LEG_LEFT = 0,
+    APP_LEG_RIGHT,
+} app_leg_index_t;
 
 typedef struct {
     uint32_t control_ticks;
@@ -83,9 +89,20 @@ typedef struct {
 } app_imu_obs_t;
 
 typedef struct {
+    uint16_t ft_raw;
+    float dm_rad;
+    float theta1_deg;
+    float theta2_deg;
+    float foot_d_x_mm;
+    float foot_d_y_mm;
+    uint8_t usable;
+} app_leg_obs_t;
+
+typedef struct {
     app_dm_obs_t dm[APP_DM_COUNT];
     app_ft_obs_t ft[APP_FT_COUNT];
     app_imu_obs_t imu;
+    app_leg_obs_t leg[APP_LEG_COUNT];
 } app_obs_t;
 
 extern volatile app_status_t g_app_status;

@@ -4,6 +4,7 @@
 #include "dm_imu.h"
 #include "dm_motor.h"
 #include "feetech_servo.h"
+#include "../algorithm/leg_kinematics/leg_kinematics.h"
 #include "stm32f4xx_hal.h"
 
 dm_motor_t g_dm_motors[4];
@@ -40,6 +41,42 @@ static void app_cmd_set_defaults(void)
     }
 }
 
+static uint16_t app_ft_raw_from_servo(app_ft_index_t idx)
+{
+    int16_t raw = g_ft_servos[idx].pos;
+
+    if (raw < 0) {
+        return 0U;
+    }
+
+    return (uint16_t)raw;
+}
+
+static void app_obs_update_leg(app_leg_index_t leg_idx,
+                               leg_side_t side,
+                               app_ft_index_t ft_idx,
+                               app_dm_index_t dm_idx)
+{
+    uint16_t ft_raw = app_ft_raw_from_servo(ft_idx);
+    float dm_rad = g_dm_motors[dm_idx].pos;
+    leg_actuator_state_t actuator;
+    leg_kinematics_result_t result;
+
+    actuator.ft_raw = ft_raw;
+    actuator.dm_rad = dm_rad;
+
+    leg_kinematics_status_t st =
+        leg_kinematics_forward_from_actuator(side, &actuator, &result);
+
+    g_app_obs.leg[leg_idx].ft_raw = ft_raw;
+    g_app_obs.leg[leg_idx].dm_rad = dm_rad;
+    g_app_obs.leg[leg_idx].theta1_deg = result.joint.theta1_deg;
+    g_app_obs.leg[leg_idx].theta2_deg = result.joint.theta2_deg;
+    g_app_obs.leg[leg_idx].foot_d_x_mm = result.foot_d.x_mm;
+    g_app_obs.leg[leg_idx].foot_d_y_mm = result.foot_d.y_mm;
+    g_app_obs.leg[leg_idx].usable = (st == LEG_KINEMATICS_OK) ? 1U : 0U;
+}
+
 static void app_obs_update(void)
 {
     for (uint8_t i = 0; i < APP_DM_COUNT; i++) {
@@ -67,6 +104,11 @@ static void app_obs_update(void)
         g_app_obs.imu.gyro[i] = g_imu.gyro[i];
         g_app_obs.imu.accel[i] = g_imu.accel[i];
     }
+
+    app_obs_update_leg(APP_LEG_LEFT, LEG_SIDE_LEFT,
+                       APP_FT_LEFT, APP_DM_LEFT_JOINT);
+    app_obs_update_leg(APP_LEG_RIGHT, LEG_SIDE_RIGHT,
+                       APP_FT_RIGHT, APP_DM_RIGHT_JOINT);
 }
 
 static void app_run_dm_manual(void)
