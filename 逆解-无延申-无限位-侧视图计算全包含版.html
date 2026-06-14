@@ -1,0 +1,558 @@
+
+<style>
+  .wrap { padding: 12px 0; }
+  .legs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .leg-panel { display: flex; flex-direction: column; gap: 6px; }
+  .leg-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); text-align: center; padding: 4px 0; }
+  canvas { width: 100%; border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); display: block; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl-row { display: flex; align-items: center; gap: 6px; }
+  .ctrl-label { font-size: 12px; color: var(--color-text-secondary); min-width: 52px; }
+  .ctrl-val { font-size: 12px; font-weight: 500; min-width: 40px; text-align: right; color: var(--color-text-primary); }
+  input[type=range] { flex: 1; }
+  .num-input { width: 72px; padding: 3px 5px; border-radius: var(--border-radius-sm); border: 0.5px solid var(--color-border-tertiary); background: var(--color-background-primary); color: var(--color-text-primary); font-size: 12px; }
+  .section-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin: 14px 0 6px; }
+  .status { font-size: 11px; padding: 5px 8px; border-radius: var(--border-radius-md); margin-top: 2px; line-height: 1.5; }
+  .ok   { background: var(--color-background-success); color: var(--color-text-success); }
+  .warn { background: var(--color-background-warning); color: var(--color-text-warning); }
+  .err  { background: var(--color-background-danger);  color: var(--color-text-danger);  }
+  .coords-row-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
+  .coords-row-6 { display: grid; grid-template-columns: repeat(6,1fr); gap: 5px; }
+  .card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 6px 8px; }
+  .card-label { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 2px; }
+  .card-val { font-size: 11px; font-weight: 500; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="wrap">
+  <div class="legs">
+    <div class="leg-panel">
+      <div class="leg-title">右腿（侧视图）</div>
+      <canvas id="cvL" width="300" height="360"></canvas>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <span class="ctrl-label">θ₁ (y轴)</span>
+          <input type="range" id="slL1" min="-180" max="25" value="25" step="1">
+          <span class="ctrl-val" id="vL1">25°</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">θ₂ (x轴)</span>
+          <input type="range" id="slL2" min="-170" max="-45" value="-45" step="1">
+          <span class="ctrl-val" id="vL2">-45°</span>
+        </div>
+      </div>
+      <div id="stL" class="status ok"></div>
+      <div class="coords-row-4">
+        <div class="card"><div class="card-label">A</div><div class="card-val" id="cLA">—</div></div>
+        <div class="card"><div class="card-label">B</div><div class="card-val" id="cLB">—</div></div>
+        <div class="card"><div class="card-label">C</div><div class="card-val" id="cLC">—</div></div>
+        <div class="card"><div class="card-label">D（足端）</div><div class="card-val" id="cLD">—</div></div>
+      </div>
+    </div>
+
+    <div class="leg-panel">
+      <div class="leg-title">左腿（侧视图，左右镜像）</div>
+      <canvas id="cvR" width="300" height="360"></canvas>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <span class="ctrl-label">θ₁ (y轴)</span>
+          <input type="range" id="slR1" min="-180" max="25" value="25" step="1">
+          <span class="ctrl-val" id="vR1">25°</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">θ₂ (x轴)</span>
+          <input type="range" id="slR2" min="-170" max="-45" value="-45" step="1">
+          <span class="ctrl-val" id="vR2">-45°</span>
+        </div>
+      </div>
+      <div id="stR" class="status ok"></div>
+      <div class="coords-row-4">
+        <div class="card"><div class="card-label">A</div><div class="card-val" id="cRA">—</div></div>
+        <div class="card"><div class="card-label">B</div><div class="card-val" id="cRB">—</div></div>
+        <div class="card"><div class="card-label">C</div><div class="card-val" id="cRC">—</div></div>
+        <div class="card"><div class="card-label">D（足端）</div><div class="card-val" id="cRD">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">逆解（输入 D 点坐标）</div>
+  <div class="legs">
+    <div class="leg-panel">
+      <div class="leg-title">右腿逆解（侧视图）</div>
+      <canvas id="cvInvL" width="300" height="360"></canvas>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <span class="ctrl-label">D.x</span>
+          <input class="num-input" type="number" id="invLDx" value="-5.26" step="0.1">
+          <span class="ctrl-label">D.y</span>
+          <input class="num-input" type="number" id="invLDy" value="-113.26" step="0.1">
+        </div>
+      </div>
+      <div id="stInvL" class="status ok"></div>
+      <div class="coords-row-6">
+        <div class="card"><div class="card-label">A</div><div class="card-val" id="iLA">—</div></div>
+        <div class="card"><div class="card-label">B</div><div class="card-val" id="iLB">—</div></div>
+        <div class="card"><div class="card-label">C</div><div class="card-val" id="iLC">—</div></div>
+        <div class="card"><div class="card-label">D</div><div class="card-val" id="iLD">—</div></div>
+        <div class="card"><div class="card-label">θ₁</div><div class="card-val" id="iLTheta1">—</div></div>
+        <div class="card"><div class="card-label">θ₂</div><div class="card-val" id="iLTheta2">—</div></div>
+      </div>
+    </div>
+
+    <div class="leg-panel">
+      <div class="leg-title">左腿逆解（侧视图，左右镜像）</div>
+      <canvas id="cvInvR" width="300" height="360"></canvas>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <span class="ctrl-label">D.x</span>
+          <input class="num-input" type="number" id="invRDx" value="5.26" step="0.1">
+          <span class="ctrl-label">D.y</span>
+          <input class="num-input" type="number" id="invRDy" value="-113.26" step="0.1">
+        </div>
+      </div>
+      <div id="stInvR" class="status ok"></div>
+      <div class="coords-row-6">
+        <div class="card"><div class="card-label">A</div><div class="card-val" id="iRA">—</div></div>
+        <div class="card"><div class="card-label">B</div><div class="card-val" id="iRB">—</div></div>
+        <div class="card"><div class="card-label">C</div><div class="card-val" id="iRC">—</div></div>
+        <div class="card"><div class="card-label">D</div><div class="card-val" id="iRD">—</div></div>
+        <div class="card"><div class="card-label">θ₁</div><div class="card-val" id="iRTheta1">—</div></div>
+        <div class="card"><div class="card-label">θ₂</div><div class="card-val" id="iRTheta2">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const O1L=[0,21], O2L=[21*Math.sqrt(3),0];
+const O1R=[0,21], O2R=[-21*Math.sqrt(3),0];
+const L1=24,L2=120,L3=120,L4=35,CD_LEN=155;
+const BD_LEN=CD_LEN-L4;
+const THETA1_MIN=-180, THETA1_MAX=25;
+const THETA2_MIN=-170, THETA2_MAX=-45;
+
+function deg2rad(d){return d*Math.PI/180;}
+function rad2deg(r){return r*180/Math.PI;}
+function fmt(v){return v.toFixed(1);}
+function fmtDeg(v){return v.toFixed(1)+'°';}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function readAngleSlider(id,min,max){
+  const el=document.getElementById(id);
+  const v=clamp(+el.value,min,max);
+  if(+el.value!==v) el.value=v;
+  return v;
+}
+function readNumber(id){
+  const v=+document.getElementById(id).value;
+  return Number.isFinite(v)?v:0;
+}
+
+// ── 线段相交 ─────────────────────────────────────────────────────
+function cross2d(ax,ay,bx,by){return ax*by-ay*bx;}
+function segIntersect(p1,p2,p3,p4,shared){
+  const d1x=p2[0]-p1[0],d1y=p2[1]-p1[1];
+  const d2x=p4[0]-p3[0],d2y=p4[1]-p3[1];
+  const denom=cross2d(d1x,d1y,d2x,d2y);
+  if(Math.abs(denom)<1e-8) return false;
+  const dx=p3[0]-p1[0],dy=p3[1]-p1[1];
+  const t=cross2d(dx,dy,d2x,d2y)/denom;
+  const u=cross2d(dx,dy,d1x,d1y)/denom;
+  const E=1e-4;
+  const tI=t>E&&t<1-E, uI=u>E&&u<1-E;
+  if(shared) return tI&&uI;
+  return t>=-1e-8&&t<=1+1e-8&&u>=-1e-8&&u<=1+1e-8&&tI&&uI;
+}
+
+// ── 完整交叉检测 ─────────────────────────────────────────────────
+// 所有杆段：L1=O1-A, L2=O2-B, L3=A-C, L4=B-C, L5=C-D, L6=B-D
+// 邻接关系（共享端点，只检测内部穿越）：
+//   L1-L3(A), L2-L4(B), L3-L4(C), L3-L5(C), L4-L5(C), L4-L6(B), L5-L6(D), L2-L6(B)
+// 注意：L4(B-C) 与 L5(C-D) 与 L6(B-D) 三者共线且 B、C、D 共线 → 不会内部交叉，跳过
+// 非邻接（完整检测）：L1-L2, L1-L4, L1-L5, L1-L6, L2-L3, L2-L5, L3-L6
+function checkCross(o1,A,o2,B,C,D){
+  const issues=[];
+  // 非邻接杆对
+  if(segIntersect(o1,A, o2,B, false)) issues.push('L1×L2');
+  if(segIntersect(o1,A, B,C,  false)) issues.push('L1×L4');
+  if(segIntersect(o1,A, C,D,  false)) issues.push('L1×CD');
+  if(segIntersect(o1,A, B,D,  false)) issues.push('L1×BD');
+  if(segIntersect(o2,B, A,C,  false)) issues.push('L2×L3');
+  if(segIntersect(o2,B, C,D,  false)) issues.push('L2×CD');
+  // 邻接杆对（共享端点，检测内部穿越）
+  if(segIntersect(o1,A, A,C,  true))  issues.push('L1×L3');
+  if(segIntersect(o2,B, B,C,  true))  issues.push('L2×L4');
+  if(segIntersect(o2,B, B,D,  true))  issues.push('L2×BD');
+  if(segIntersect(A,C,  B,C,  true))  issues.push('L3×L4');
+  if(segIntersect(A,C,  C,D,  true))  issues.push('L3×CD');
+  // L3(A-C) 与 BD(B-D)：非邻接
+  if(segIntersect(A,C,  B,D,  false)) issues.push('L3×BD');
+  return issues;
+}
+
+// ── D 点求解（C→B 延长，CD=155）─────────────────────────────────
+function solveD(B,C){
+  const dx=B[0]-C[0],dy=B[1]-C[1];
+  const len=Math.sqrt(dx*dx+dy*dy);
+  if(len<1e-9) return null;
+  return [C[0]+CD_LEN*dx/len, C[1]+CD_LEN*dy/len];
+}
+
+function circleIntersections(c0,r0,c1,r1){
+  const dx=c1[0]-c0[0],dy=c1[1]-c0[1];
+  const d=Math.sqrt(dx*dx+dy*dy);
+  const E=1e-8;
+  if(d<E||d>r0+r1+E||d<Math.abs(r0-r1)-E) return [];
+
+  const a=(r0*r0-r1*r1+d*d)/(2*d);
+  const h2=r0*r0-a*a;
+  if(h2<-E) return [];
+
+  const h=Math.sqrt(Math.max(0,h2));
+  const mx=c0[0]+a*dx/d,my=c0[1]+a*dy/d;
+  const px=-dy/d,py=dx/d;
+
+  const p1=[mx+h*px,my+h*py];
+  if(h<E) return [p1];
+  return [p1,[mx-h*px,my-h*py]];
+}
+
+function theta1FromA(A,o1,isRight){
+  return rad2deg(isRight?Math.atan2(o1[0]-A[0],A[1]-o1[1])
+                         :Math.atan2(A[0]-o1[0],A[1]-o1[1]));
+}
+
+function theta2FromB(B,o2,isRight){
+  return rad2deg(isRight?Math.atan2(B[1]-o2[1],o2[0]-B[0])
+                         :Math.atan2(B[1]-o2[1],B[0]-o2[0]));
+}
+
+function angleLimitIssues(t1,t2){
+  const issues=[];
+  const E=1e-6;
+  if(t1<THETA1_MIN-E||t1>THETA1_MAX+E) issues.push(`θ₁=${fmtDeg(t1)} 超出 ${THETA1_MIN}°~${THETA1_MAX}°`);
+  if(t2<THETA2_MIN-E||t2>THETA2_MAX+E) issues.push(`θ₂=${fmtDeg(t2)} 超出 ${THETA2_MIN}°~${THETA2_MAX}°`);
+  return issues;
+}
+
+function limitPenalty(t1,t2){
+  const E=1e-6;
+  const p1=t1<THETA1_MIN-E?THETA1_MIN-t1:(t1>THETA1_MAX+E?t1-THETA1_MAX:0);
+  const p2=t2<THETA2_MIN-E?THETA2_MIN-t2:(t2>THETA2_MAX+E?t2-THETA2_MAX:0);
+  return p1+p2;
+}
+
+// ── 正运动学 ─────────────────────────────────────────────────────
+function solve(t1deg,t2deg,isRight){
+  const t1=deg2rad(t1deg),t2=deg2rad(t2deg);
+  const o1=isRight?O1R:O1L;
+  const o2=isRight?O2R:O2L;
+  const Ax=isRight?o1[0]-L1*Math.sin(t1):o1[0]+L1*Math.sin(t1);
+  const Ay=o1[1]+L1*Math.cos(t1);
+  const Bx=isRight?o2[0]-L2*Math.cos(t2):o2[0]+L2*Math.cos(t2);
+  const By=o2[1]+L2*Math.sin(t2);
+  const A=[Ax,Ay],B=[Bx,By];
+
+  const dx=Bx-Ax,dy=By-Ay,dAB=Math.sqrt(dx*dx+dy*dy);
+  if(dAB>L3+L4||dAB<Math.abs(L3-L4)||dAB<1e-9)
+    return {ok:false,A,B,C:null,D:null,cross:[],o1,o2};
+
+  const a=(L3*L3-L4*L4+dAB*dAB)/(2*dAB);
+  const h2=L3*L3-a*a;
+  if(h2<0) return {ok:false,A,B,C:null,D:null,cross:[],o1,o2};
+  const h=Math.sqrt(h2);
+  const mx=Ax+a*dx/dAB,my=Ay+a*dy/dAB;
+
+  const candidates=[
+    [mx+h*(-dy/dAB),my+h*(dx/dAB)],
+    [mx-h*(-dy/dAB),my-h*(dx/dAB)],
+  ];
+
+  const ranked=candidates.map(C=>{
+    const D=solveD(B,C);
+    const cross=D?checkCross(o1,A,o2,B,C,D):[];
+    return {C,D,cross,n:cross.length};
+  }).sort((a,b)=>a.n!==b.n?a.n-b.n:b.C[1]-a.C[1]);
+
+  return {
+    ok:true, A, B,
+    C:ranked[0].C, D:ranked[0].D,
+    cross:ranked[0].cross,
+    bothCross:ranked[0].n>0&&ranked[1].n>0,
+    o1, o2,
+  };
+}
+
+// ── 逆运动学：由 D 点反求 A/B/C 与解耦角 ─────────────────────────
+function solveInverse(Dx,Dy,isRight){
+  const o1=isRight?O1R:O1L;
+  const o2=isRight?O2R:O2L;
+  const D=[Dx,Dy];
+  const bCandidates=circleIntersections(o2,L2,D,BD_LEN);
+
+  if(bCandidates.length===0){
+    return {
+      ok:false,A:o1,B:o2,C:null,D,
+      cross:[],o1,o2,
+      message:'✗ D 点超出 B 点可达范围',
+    };
+  }
+
+  const candidates=[];
+  bCandidates.forEach(B=>{
+    const dbx=D[0]-B[0],dby=D[1]-B[1];
+    const dBD=Math.sqrt(dbx*dbx+dby*dby);
+    if(dBD<1e-9) return;
+
+    const C=[B[0]-L4*dbx/dBD,B[1]-L4*dby/dBD];
+    const aCandidates=circleIntersections(o1,L1,C,L3);
+
+    aCandidates.forEach(A=>{
+      const t1=theta1FromA(A,o1,isRight);
+      const t2=theta2FromB(B,o2,isRight);
+      const cross=checkCross(o1,A,o2,B,C,D);
+      const limitIssues=angleLimitIssues(t1,t2);
+      candidates.push({
+        ok:true,A,B,C,D,cross,o1,o2,
+        theta1:t1,theta2:t2,
+        limitIssues,
+        limitPenalty:limitPenalty(t1,t2),
+      });
+    });
+  });
+
+  if(candidates.length===0){
+    return {
+      ok:false,A:o1,B:bCandidates[0],C:null,D,
+      cross:[],o1,o2,
+      message:'✗ D 点可求 B，但 A 点无解',
+    };
+  }
+
+  candidates.sort((a,b)=>{
+    if(a.limitIssues.length!==b.limitIssues.length) return a.limitIssues.length-b.limitIssues.length;
+    if(a.limitPenalty!==b.limitPenalty) return a.limitPenalty-b.limitPenalty;
+    if(a.cross.length!==b.cross.length) return a.cross.length-b.cross.length;
+    return b.C[1]-a.C[1];
+  });
+
+  return candidates[0];
+}
+
+// ── 渲染 ─────────────────────────────────────────────────────────
+function getColors(){
+  const dark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return {
+    bg:    dark?'#1a1a18':'#ffffff',
+    grid:  dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)',
+    axis:  dark?'rgba(255,255,255,0.14)':'rgba(0,0,0,0.14)',
+    textSec:dark?'#7a7870':'#9a9890',
+    link1:'#534AB7',link2:'#0F6E56',link3:'#BA7517',link4:'#A32D2D',
+    linkCD:'#1D9E75',linkBD:'#1D9E75',
+    linkX:'#E24B4A',
+    ptO:  dark?'#666462':'#888780',
+    ptA:'#534AB7',ptB:'#0F6E56',ptC:'#A32D2D',
+    ptD:  dark?'#1D9E75':'#0F6E56',
+    ptDfill:dark?'rgba(29,158,117,0.18)':'rgba(15,110,86,0.1)',
+    ptCfill:dark?'rgba(163,45,45,0.15)':'rgba(163,45,45,0.1)',
+  };
+}
+
+function drawLeg(canvasEl,res,statusEl,cAEl,cBEl,cCEl,cDEl){
+  const W=canvasEl.width,H=canvasEl.height;
+  const cl=getColors();
+  const ctx=canvasEl.getContext('2d');
+  const {o1,o2,A,B,C,D,ok,cross}=res;
+
+  const pts=[o1,o2,A,B,...(C?[C]:[]),...(D?[D]:[])];
+  let minX=Math.min(...pts.map(p=>p[0]));
+  let maxX=Math.max(...pts.map(p=>p[0]));
+  let minY=Math.min(...pts.map(p=>p[1]));
+  let maxY=Math.max(...pts.map(p=>p[1]));
+  const pad=48;
+  const rX=Math.max(maxX-minX,40),rY=Math.max(maxY-minY,40);
+  const scale=Math.min((W-2*pad)/rX,(H-2*pad)/rY)*0.80;
+  const cx=W/2-(minX+maxX)/2*scale;
+  const cy=H/2+(minY+maxY)/2*scale;
+
+  function tx(x){return cx+x*scale;}
+  function ty(y){return cy-y*scale;}
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=cl.bg; ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle=cl.grid; ctx.lineWidth=0.5;
+  for(let g=-300;g<=500;g+=20){
+    ctx.beginPath();ctx.moveTo(tx(g),0);ctx.lineTo(tx(g),H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,ty(g));ctx.lineTo(W,ty(g));ctx.stroke();
+  }
+  ctx.strokeStyle=cl.axis; ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(0,ty(0));ctx.lineTo(W,ty(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(tx(0),0);ctx.lineTo(tx(0),H);ctx.stroke();
+
+  function seg(x1,y1,x2,y2,color,crossed,dashed){
+    ctx.beginPath();
+    ctx.setLineDash(dashed?[5,4]:[]);
+    ctx.strokeStyle=crossed?cl.linkX:color;
+    ctx.lineWidth=crossed?1.8:2.2;
+    ctx.moveTo(tx(x1),ty(y1));ctx.lineTo(tx(x2),ty(y2));ctx.stroke();
+    ctx.setLineDash([]);
+    if(crossed){
+      const mx=(tx(x1)+tx(x2))/2,my=(ty(y1)+ty(y2))/2,r=6;
+      ctx.beginPath();ctx.strokeStyle=cl.linkX;ctx.lineWidth=1.5;
+      ctx.moveTo(mx-r,my-r);ctx.lineTo(mx+r,my+r);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(mx+r,my-r);ctx.lineTo(mx-r,my+r);ctx.stroke();
+    }
+  }
+
+  function pt(x,y,fc,sc,r){
+    ctx.beginPath();ctx.arc(tx(x),ty(y),r,0,Math.PI*2);
+    ctx.fillStyle=fc;ctx.fill();
+    ctx.strokeStyle=sc;ctx.lineWidth=1.8;ctx.stroke();
+  }
+
+  function lbl(x,y,t,c,ox,oy){
+    ctx.fillStyle=c;ctx.font='500 11px sans-serif';
+    ctx.fillText(t,tx(x)+ox,ty(y)+oy);
+  }
+
+  function isCrossed(...names){
+    return cross&&names.some(n=>cross.some(s=>s.includes(n)));
+  }
+
+  if(ok&&C){
+    const hasCross=cross.length>0;
+
+    // 主四杆
+    seg(o1[0],o1[1],A[0],A[1],cl.link1,isCrossed('L1'));
+    seg(o2[0],o2[1],B[0],B[1],cl.link2,isCrossed('L2'));
+    seg(A[0],A[1],C[0],C[1],cl.link3,isCrossed('L3'));
+    seg(B[0],B[1],C[0],C[1],cl.link4,isCrossed('L4'));
+
+    if(D){
+      // C-D 实线
+      seg(C[0],C[1],D[0],D[1],cl.linkCD,isCrossed('CD'));
+      // B-D 虚线（共线验证杆，现在也做完整碰撞检测）
+      seg(B[0],B[1],D[0],D[1],cl.linkBD,isCrossed('BD'),true);
+
+      ctx.beginPath();ctx.arc(tx(D[0]),ty(D[1]),12,0,Math.PI*2);
+      ctx.fillStyle=cl.ptDfill;ctx.fill();
+      pt(D[0],D[1],cl.ptDfill,cl.ptD,5);
+      lbl(D[0],D[1],'D',cl.ptD,8,-8);
+    }
+
+    if(hasCross){
+      ctx.fillStyle='rgba(226,75,74,0.07)';ctx.fillRect(0,0,W,H);
+    }
+
+    ctx.beginPath();ctx.arc(tx(C[0]),ty(C[1]),10,0,Math.PI*2);
+    ctx.fillStyle=hasCross?'rgba(226,75,74,0.2)':cl.ptCfill;ctx.fill();
+    pt(C[0],C[1],hasCross?'rgba(226,75,74,0.25)':cl.ptCfill,hasCross?cl.linkX:cl.ptC,5);
+    lbl(C[0],C[1],'C',hasCross?cl.linkX:cl.ptC,8,-8);
+
+    cCEl.textContent=`(${fmt(C[0])},${fmt(C[1])})`;
+    cDEl.textContent=D?`(${fmt(D[0])},${fmt(D[1])})`:'-';
+
+    if(res.limitIssues&&res.limitIssues.length>0){
+      statusEl.className='status err';
+      statusEl.textContent='✗ 角度超限：'+res.limitIssues.join('；')+(hasCross?'；杆件交叉：'+cross.join('、'):'');
+    } else if(hasCross){
+      statusEl.className='status '+(res.bothCross?'err':'warn');
+      statusEl.textContent=(res.bothCross?'✗ 两解均交叉：':'⚠ 当前解交叉：')+cross.join('、');
+    } else {
+      statusEl.className='status ok';
+      statusEl.textContent='✓ 无杆件交叉';
+    }
+  } else {
+    seg(o1[0],o1[1],A[0],A[1],cl.link1,false);
+    seg(o2[0],o2[1],B[0],B[1],cl.link2,false);
+    if(D){
+      ctx.beginPath();ctx.arc(tx(D[0]),ty(D[1]),12,0,Math.PI*2);
+      ctx.fillStyle=cl.ptDfill;ctx.fill();
+      pt(D[0],D[1],cl.ptDfill,cl.ptD,5);
+      lbl(D[0],D[1],'D',cl.ptD,8,-8);
+    }
+    cCEl.textContent='不可达';cDEl.textContent=D?`(${fmt(D[0])},${fmt(D[1])})`:'—';
+    statusEl.className='status err';
+    statusEl.textContent=res.message||'✗ 超出工作空间';
+  }
+
+  pt(o1[0],o1[1],cl.bg,cl.ptO,5);lbl(o1[0],o1[1],'O₁',cl.ptO,-18,-6);
+  pt(o2[0],o2[1],cl.bg,cl.ptO,5);lbl(o2[0],o2[1],'O₂',cl.ptO,6,-6);
+  pt(A[0],A[1],cl.bg,cl.ptA,5);  lbl(A[0],A[1],'A',cl.ptA,6,-6);
+  pt(B[0],B[1],cl.bg,cl.ptB,5);  lbl(B[0],B[1],'B',cl.ptB,6,-6);
+
+  cAEl.textContent=`(${fmt(A[0])},${fmt(A[1])})`;
+  cBEl.textContent=`(${fmt(B[0])},${fmt(B[1])})`;
+
+  // 图例
+  const lx=6,ly=H-72;
+  const legend=[
+    {c:cl.link1,t:'L1: O₁–A'},{c:cl.link2,t:'L2: O₂–B'},
+    {c:cl.link3,t:'L3: A–C'}, {c:cl.link4,t:'L4: B–C'},
+    {c:cl.linkCD,t:'C–D(155)'},{c:cl.linkBD,t:'B–D(120)',dash:true},
+  ];
+  legend.forEach((it,i)=>{
+    const row=Math.floor(i/2),col=i%2;
+    const x=lx+col*100,y=ly+row*18;
+    ctx.beginPath();
+    ctx.setLineDash(it.dash?[4,3]:[]);
+    ctx.strokeStyle=it.c;ctx.lineWidth=2;
+    ctx.moveTo(x,y);ctx.lineTo(x+16,y);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=cl.textSec;ctx.font='10px sans-serif';
+    ctx.fillText(it.t,x+20,y+4);
+  });
+}
+
+function setThetaCards(res,t1El,t2El){
+  if(res&&res.ok&&Number.isFinite(res.theta1)&&Number.isFinite(res.theta2)){
+    t1El.textContent=fmtDeg(res.theta1);
+    t2El.textContent=fmtDeg(res.theta2);
+  } else {
+    t1El.textContent='不可达';
+    t2El.textContent='不可达';
+  }
+}
+
+function updateAll(){
+  const t1L=readAngleSlider('slL1',THETA1_MIN,THETA1_MAX);
+  const t2L=readAngleSlider('slL2',THETA2_MIN,THETA2_MAX);
+  const t1R=readAngleSlider('slR1',THETA1_MIN,THETA1_MAX);
+  const t2R=readAngleSlider('slR2',THETA2_MIN,THETA2_MAX);
+
+  document.getElementById('vL1').textContent=t1L+'°';
+  document.getElementById('vL2').textContent=t2L+'°';
+  document.getElementById('vR1').textContent=t1R+'°';
+  document.getElementById('vR2').textContent=t2R+'°';
+
+  const resL=solve(t1L,t2L,false);
+  const resR=solve(t1R,t2R,true);
+  const invL=solveInverse(readNumber('invLDx'),readNumber('invLDy'),false);
+  const invR=solveInverse(readNumber('invRDx'),readNumber('invRDy'),true);
+
+  drawLeg(document.getElementById('cvL'),resL,
+    document.getElementById('stL'),
+    document.getElementById('cLA'),document.getElementById('cLB'),
+    document.getElementById('cLC'),document.getElementById('cLD'));
+  drawLeg(document.getElementById('cvR'),resR,
+    document.getElementById('stR'),
+    document.getElementById('cRA'),document.getElementById('cRB'),
+    document.getElementById('cRC'),document.getElementById('cRD'));
+
+  drawLeg(document.getElementById('cvInvL'),invL,
+    document.getElementById('stInvL'),
+    document.getElementById('iLA'),document.getElementById('iLB'),
+    document.getElementById('iLC'),document.getElementById('iLD'));
+  setThetaCards(invL,document.getElementById('iLTheta1'),document.getElementById('iLTheta2'));
+
+  drawLeg(document.getElementById('cvInvR'),invR,
+    document.getElementById('stInvR'),
+    document.getElementById('iRA'),document.getElementById('iRB'),
+    document.getElementById('iRC'),document.getElementById('iRD'));
+  setThetaCards(invR,document.getElementById('iRTheta1'),document.getElementById('iRTheta2'));
+}
+
+['slL1','slL2','slR1','slR2','invLDx','invLDy','invRDx','invRDy'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',updateAll);
+});
+updateAll();
+</script>

@@ -1,0 +1,4 @@
+../user/algorithm/leg_kinematics/leg_kinematics.c:3:12:leg_side_is_valid	3
+../user/algorithm/leg_kinematics/leg_kinematics.c:8:25:leg_kinematics_full_forward	4
+../user/algorithm/leg_kinematics/leg_kinematics.c:19:25:leg_kinematics_full_inverse	4
+../user/algorithm/leg_kinematics/leg_kinematics.c:30:25:leg_kinematics_fixed_ft_forward	4

@@ -1,6 +1,6 @@
 #include "feetech_servo.h"
 
-extern UART_HandleTypeDef huart1;   /* CubeMX 生成，配置好后与 FEETECH_HUART 保持一致 */
+extern UART_HandleTypeDef huart2;   /* CubeMX 生成，配置好后与 FEETECH_HUART 保持一致 */
 
 feetech_servo_t g_ft_servos[2];
 
@@ -9,7 +9,7 @@ feetech_servo_t g_ft_servos[2];
 #define INST_READ        0x02
 #define INST_SYNC_WRITE  0x83
 #define ADDR_TORQUE      40    /* 扭矩使能寄存器 */
-#define ADDR_ACC         41    /* 加速度，位置，时间，速度连续写入起始地址 */
+#define ADDR_GOAL_POS    42    /* 目标位置、运行时间、运行速度连续写入起始地址 */
 #define ADDR_POS_L       56    /* 当前位置反馈起始地址 */
 #define FB_LEN           8     /* 一次读取反馈的字节数（位置/速度/负载/电压/温度）*/
 
@@ -82,24 +82,25 @@ void feetech_servo_disable(uint8_t id)
 
 void feetech_servo_set_pos(uint8_t id, uint16_t pos, uint16_t speed, uint8_t acc)
 {
-    /* 从 ADDR_ACC 连续写 7 字节：acc | pos_H | pos_L | time_H | time_L | spd_H | spd_L */
-    uint8_t payload[7];
-    payload[0] = acc;
-    payload[1] = (uint8_t)(pos   >> 8);
-    payload[2] = (uint8_t)(pos   & 0xFF);
-    payload[3] = 0;               /* time = 0 */
-    payload[4] = 0;
-    payload[5] = (uint8_t)(speed >> 8);
-    payload[6] = (uint8_t)(speed & 0xFF);
+    (void)acc;
 
-    send_write(id, ADDR_ACC, payload, sizeof(payload));
+    /* 从 ADDR_GOAL_POS 连续写 6 字节：pos_H | pos_L | time_H | time_L | spd_H | spd_L */
+    uint8_t payload[6];
+    payload[0] = (uint8_t)(pos   >> 8);
+    payload[1] = (uint8_t)(pos   & 0xFF);
+    payload[2] = 0;               /* time = 0 */
+    payload[3] = 0;
+    payload[4] = (uint8_t)(speed >> 8);
+    payload[5] = (uint8_t)(speed & 0xFF);
+
+    send_write(id, ADDR_GOAL_POS, payload, sizeof(payload));
 }
 
 void feetech_servo_sync_set_pos(uint16_t pos_l, uint16_t pos_r,
                                  uint16_t speed, uint8_t acc)
 {
     /* SYNC_WRITE 帧：0xFF 0xFF 0xFE | mesLen | INST | addr | data_len | [ID payload]... | cs */
-    const uint8_t data_len = 7;   /* 每个舵机的数据字节数 */
+    const uint8_t data_len = 6;   /* 每个舵机的数据字节数 */
     const uint8_t n        = 2;   /* 舵机数量 */
     uint8_t msg_len = (uint8_t)((data_len + 1) * n + 4);
 
@@ -112,17 +113,16 @@ void feetech_servo_sync_set_pos(uint16_t pos_l, uint16_t pos_r,
     buf[idx++] = 0xFE;            /* 广播 ID */
     buf[idx++] = msg_len;
     buf[idx++] = INST_SYNC_WRITE;
-    buf[idx++] = ADDR_ACC;
+    buf[idx++] = ADDR_GOAL_POS;
     buf[idx++] = data_len;
 
-    checksum = (uint8_t)(0xFE + msg_len + INST_SYNC_WRITE + ADDR_ACC + data_len);
+    checksum = (uint8_t)(0xFE + msg_len + INST_SYNC_WRITE + ADDR_GOAL_POS + data_len);
 
     uint16_t positions[2] = {pos_l, pos_r};
     uint8_t  ids[2]       = {FEETECH_ID_LEFT, FEETECH_ID_RIGHT};
 
     for (uint8_t i = 0; i < n; i++) {
         buf[idx++] = ids[i];
-        buf[idx++] = acc;
         buf[idx++] = (uint8_t)(positions[i] >> 8);
         buf[idx++] = (uint8_t)(positions[i] & 0xFF);
         buf[idx++] = 0;           /* time = 0 */
@@ -130,7 +130,7 @@ void feetech_servo_sync_set_pos(uint16_t pos_l, uint16_t pos_r,
         buf[idx++] = (uint8_t)(speed >> 8);
         buf[idx++] = (uint8_t)(speed & 0xFF);
 
-        checksum = (uint8_t)(checksum + ids[i] + acc
+        checksum = (uint8_t)(checksum + ids[i]
                    + (positions[i] >> 8) + (positions[i] & 0xFF)
                    + (speed >> 8) + (speed & 0xFF));
     }

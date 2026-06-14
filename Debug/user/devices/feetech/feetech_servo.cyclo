@@ -6,5 +6,5 @@
 ../user/devices/feetech/feetech_servo.c:71:6:feetech_servo_enable	1
 ../user/devices/feetech/feetech_servo.c:77:6:feetech_servo_disable	1
 ../user/devices/feetech/feetech_servo.c:83:6:feetech_servo_set_pos	1
-../user/devices/feetech/feetech_servo.c:98:6:feetech_servo_sync_set_pos	2
+../user/devices/feetech/feetech_servo.c:99:6:feetech_servo_sync_set_pos	2
 ../user/devices/feetech/feetech_servo.c:143:5:feetech_servo_update	7
