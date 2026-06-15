@@ -27,6 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app.h"
+#include "dm_motor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,12 +98,30 @@ int main(void)
   /* USER CODE BEGIN 2 */
   app_init();
   HAL_TIM_Base_Start_IT(&htim6);
+  HAL_Delay(3000);
+  dm_motor_enable(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX]);
+
+  float left_joint_test_pos = 0.8f;
+  float left_joint_test_dir = 1.0f;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX],
+                      left_joint_test_pos, 0.0f, 2.0f, 0.05f, 0.0f);
+
+    left_joint_test_pos += left_joint_test_dir * 0.1f;
+    if (left_joint_test_pos >= 1.6f) {
+      left_joint_test_pos = 1.6f;
+      left_joint_test_dir = -1.0f;
+    } else if (left_joint_test_pos <= 0.8f) {
+      left_joint_test_pos = 0.8f;
+      left_joint_test_dir = 1.0f;
+    }
+
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
     app_background();
     /* USER CODE BEGIN 3 */
