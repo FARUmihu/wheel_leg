@@ -20,7 +20,10 @@
 #define LEG_FT_RAW_MAX      938.0f
 #define LEG_FT_THETA_SPAN   205.0f
 
-#define LEG_DM_THETA_SPAN_DEG 125.0f
+#define LEG_THETA2_SPAN_DEG (LEG_THETA2_MAX_DEG - LEG_THETA2_MIN_DEG)
+#define LEG_DM_RAD_MIN       0.0f
+#define LEG_DM_RAD_MAX       2.22f
+#define LEG_DM_RAD_SPAN      (LEG_DM_RAD_MAX - LEG_DM_RAD_MIN)
 #define LEG_PI 3.14159265358979323846f
 
 typedef struct {
@@ -278,26 +281,27 @@ uint16_t leg_kinematics_theta1_deg_to_ft_raw(leg_side_t side, float theta1_deg)
 
 float leg_kinematics_dm_rad_to_theta2_deg(leg_side_t side, float dm_rad)
 {
-    float dm_deg = rad_to_deg(dm_rad);
+    float normalized;
 
     if (side == LEG_SIDE_LEFT) {
-        return LEG_THETA2_MIN_DEG + dm_deg;
+        normalized = (LEG_DM_RAD_MAX - dm_rad) / LEG_DM_RAD_SPAN;
+    } else {
+        normalized = (dm_rad - LEG_DM_RAD_MIN) / LEG_DM_RAD_SPAN;
     }
-    return LEG_THETA2_MAX_DEG - dm_deg;
+
+    return LEG_THETA2_MIN_DEG + normalized * LEG_THETA2_SPAN_DEG;
 }
 
 float leg_kinematics_theta2_deg_to_dm_rad(leg_side_t side, float theta2_deg)
 {
-    float dm_deg;
+    float normalized = (theta2_deg - LEG_THETA2_MIN_DEG) / LEG_THETA2_SPAN_DEG;
+    normalized = clampf_local(normalized, 0.0f, 1.0f);
 
     if (side == LEG_SIDE_LEFT) {
-        dm_deg = theta2_deg - LEG_THETA2_MIN_DEG;
-    } else {
-        dm_deg = LEG_THETA2_MAX_DEG - theta2_deg;
+        return LEG_DM_RAD_MAX - normalized * LEG_DM_RAD_SPAN;
     }
 
-    dm_deg = clampf_local(dm_deg, 0.0f, LEG_DM_THETA_SPAN_DEG);
-    return deg_to_rad(dm_deg);
+    return LEG_DM_RAD_MIN + normalized * LEG_DM_RAD_SPAN;
 }
 
 leg_kinematics_status_t leg_kinematics_forward_from_angles(leg_side_t side,

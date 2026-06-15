@@ -102,8 +102,8 @@ if (leg_kinematics_inverse_to_actuator(LEG_SIDE_LEFT, &d, &a, &r) == LEG_KINEMAT
 
 - 飞特 3：`raw=0 -> theta1=25 deg`，`raw=938 -> theta1=-180 deg`。
 - 飞特 0：现在先按飞特 3 一样算。
-- 左腿 DM：`0 deg -> theta2=-170 deg`，`125 deg -> theta2=-45 deg`。
-- 右腿 DM：`0 deg -> theta2=-45 deg`，`125 deg -> theta2=-170 deg`。
+- 左腿 DM：`2.22 rad -> theta2=-170 deg`，`0 rad -> theta2=-45 deg`。
+- 右腿 DM：`0 rad -> theta2=-170 deg`，`2.22 rad -> theta2=-45 deg`。
 
 ## 别干这些
 
