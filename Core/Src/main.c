@@ -30,6 +30,7 @@
 #include "dm_motor.h"
 #include "feetech_servo.h"
 #include "leg_kinematics.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,12 +40,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LEFT_DM_TEST_FT_RAW         700U
-#define LEFT_DM_TEST_FT_SPEED       130U
-#define LEFT_DM_TEST_FT_ACC         10U
-#define LEFT_DM_TEST_PERIOD_MS      1800U
-#define LEFT_DM_TEST_DM_SEND_MS     10U
-#define LEFT_DM_TEST_TOLERANCE_RAD  0.05f
+#define KIN_LENGTH_TEST_FIXED_THETA1_DEG  (-140.0f)
+#define KIN_LENGTH_TEST_FT_SPEED          80U
+#define KIN_LENGTH_TEST_FT_ACC            10U
+#define KIN_LENGTH_TEST_DM_KP             10.0f
+#define KIN_LENGTH_TEST_DM_KD             0.20f
+#define KIN_LENGTH_TEST_PERIOD_MS         2000U
+#define KIN_LENGTH_TEST_DM_SEND_MS        10U
 
 /* USER CODE END PD */
 
@@ -56,29 +58,34 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static const float left_dm_test_targets[] = {
-  0.90f,
-  1.10f,
-  1.30f,
+static const float kin_length_test_targets_mm[] = {
+  120.0f,
+  150.0f,
+  180.0f,
 };
 
-static uint8_t left_dm_test_index = 0U;
+static uint8_t kin_length_test_index = 0U;
 
-volatile float g_left_dm_test_kp = 10.0f;
-volatile float g_left_dm_test_kd = 0.20f;
-volatile float g_left_dm_test_target_rad;
-volatile float g_left_dm_test_feedback_rad;
-volatile float g_left_dm_test_error_rad;
-volatile uint8_t g_left_dm_test_in_tolerance;
-volatile uint8_t g_left_dm_test_dm_send_status;
-volatile int g_left_dm_test_ft_update_status;
-volatile uint32_t g_left_dm_test_cycle_count;
-volatile uint32_t g_left_dm_test_can2_error_code;
-volatile uint32_t g_left_dm_test_can2_tsr;
-volatile uint32_t g_left_dm_test_can2_esr;
-volatile uint32_t g_left_dm_test_rx_count;
-volatile leg_kinematics_result_t g_left_dm_test_fk_result;
-volatile leg_kinematics_status_t g_left_dm_test_fk_status;
+volatile float g_kin_length_test_fixed_theta1_deg = KIN_LENGTH_TEST_FIXED_THETA1_DEG;
+volatile uint16_t g_kin_length_test_fixed_ft_raw;
+volatile float g_kin_length_test_target_mm;
+volatile float g_kin_length_test_preferred_dm_rad = 1.10f;
+volatile float g_kin_length_test_target_dm_rad;
+volatile float g_kin_length_test_feedback_dm_rad;
+volatile float g_kin_length_test_target_length_mm;
+volatile float g_kin_length_test_feedback_length_mm;
+volatile float g_kin_length_test_length_error_mm;
+volatile float g_kin_length_test_dm_error_rad;
+volatile uint8_t g_kin_length_test_dm_send_status;
+volatile int g_kin_length_test_ft_update_status;
+volatile uint32_t g_kin_length_test_rx_count;
+volatile uint32_t g_kin_length_test_cycle_count;
+volatile leg_kinematics_status_t g_kin_length_test_status;
+volatile leg_kinematics_status_t g_kin_length_test_target_forward_status;
+volatile leg_kinematics_status_t g_kin_length_test_feedback_forward_status;
+volatile leg_kinematics_result_t g_kin_length_test_inverse_result;
+volatile leg_kinematics_result_t g_kin_length_test_target_forward_result;
+volatile leg_kinematics_result_t g_kin_length_test_feedback_forward_result;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -89,9 +96,9 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static float absf_local(float x)
+static float point_length_mm(leg_point_t p)
 {
-  return (x < 0.0f) ? -x : x;
+  return sqrtf((p.x_mm * p.x_mm) + (p.y_mm * p.y_mm));
 }
 
 /* USER CODE END 0 */
@@ -134,61 +141,95 @@ int main(void)
   app_init();
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_Delay(3000);
+
+  uint16_t fixed_ft_raw =
+      leg_kinematics_theta1_deg_to_ft_raw(LEG_SIDE_LEFT,
+                                          KIN_LENGTH_TEST_FIXED_THETA1_DEG);
+  g_kin_length_test_fixed_ft_raw = fixed_ft_raw;
+
   dm_motor_enable(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX]);
   feetech_servo_enable(FEETECH_ID_LEFT);
   feetech_servo_set_pos(FEETECH_ID_LEFT,
-                        LEFT_DM_TEST_FT_RAW,
-                        LEFT_DM_TEST_FT_SPEED,
-                        LEFT_DM_TEST_FT_ACC);
-  HAL_Delay(1000);
+                        fixed_ft_raw,
+                        KIN_LENGTH_TEST_FT_SPEED,
+                        KIN_LENGTH_TEST_FT_ACC);
+  HAL_Delay(1500);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    float target_rad = left_dm_test_targets[left_dm_test_index];
+    float target_length_mm = kin_length_test_targets_mm[kin_length_test_index];
+    float target_dm_rad = g_kin_length_test_preferred_dm_rad;
+    leg_kinematics_result_t inverse_result = {0};
+    leg_kinematics_result_t target_forward_result = {0};
+
+    leg_kinematics_status_t status =
+        leg_kinematics_fixed_ft_inverse_length(LEG_SIDE_LEFT,
+                                               fixed_ft_raw,
+                                               target_length_mm,
+                                               g_kin_length_test_preferred_dm_rad,
+                                               &target_dm_rad,
+                                               &inverse_result);
+    leg_kinematics_status_t target_forward_status =
+        leg_kinematics_fixed_ft_forward(LEG_SIDE_LEFT,
+                                        fixed_ft_raw,
+                                        target_dm_rad,
+                                        &target_forward_result);
+
     uint32_t start_ms = HAL_GetTick();
+    while ((HAL_GetTick() - start_ms) < KIN_LENGTH_TEST_PERIOD_MS) {
+      leg_kinematics_result_t feedback_forward_result = {0};
+      float feedback_dm_rad = g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX].pos;
 
-    g_left_dm_test_target_rad = target_rad;
-
-    while ((HAL_GetTick() - start_ms) < LEFT_DM_TEST_PERIOD_MS) {
-      leg_kinematics_result_t fk_result = {0};
-      float feedback_rad = g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX].pos;
-      float error_rad = target_rad - feedback_rad;
-
-      g_left_dm_test_dm_send_status =
+      uint8_t dm_send_status =
           dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX],
-                            target_rad,
+                            target_dm_rad,
                             0.0f,
-                            g_left_dm_test_kp,
-                            g_left_dm_test_kd,
+                            KIN_LENGTH_TEST_DM_KP,
+                            KIN_LENGTH_TEST_DM_KD,
                             0.0f);
 
-      g_left_dm_test_feedback_rad = feedback_rad;
-      g_left_dm_test_error_rad = error_rad;
-      g_left_dm_test_in_tolerance =
-          (absf_local(error_rad) <= LEFT_DM_TEST_TOLERANCE_RAD) ? 1U : 0U;
-      g_left_dm_test_fk_status =
+      leg_kinematics_status_t feedback_forward_status =
           leg_kinematics_fixed_ft_forward(LEG_SIDE_LEFT,
-                                          LEFT_DM_TEST_FT_RAW,
-                                          feedback_rad,
-                                          &fk_result);
-      g_left_dm_test_fk_result = fk_result;
-      g_left_dm_test_can2_error_code = hcan2.ErrorCode;
-      g_left_dm_test_can2_tsr = hcan2.Instance->TSR;
-      g_left_dm_test_can2_esr = hcan2.Instance->ESR;
-      g_left_dm_test_rx_count = g_dm_rx_count;
+                                          fixed_ft_raw,
+                                          feedback_dm_rad,
+                                          &feedback_forward_result);
+
+      float target_result_length_mm = point_length_mm(target_forward_result.foot_d);
+      float feedback_length_mm = point_length_mm(feedback_forward_result.foot_d);
+
+      g_kin_length_test_target_mm = target_length_mm;
+      g_kin_length_test_preferred_dm_rad = target_dm_rad;
+      g_kin_length_test_target_dm_rad = target_dm_rad;
+      g_kin_length_test_feedback_dm_rad = feedback_dm_rad;
+      g_kin_length_test_target_length_mm = target_result_length_mm;
+      g_kin_length_test_feedback_length_mm = feedback_length_mm;
+      g_kin_length_test_length_error_mm = target_length_mm - feedback_length_mm;
+      g_kin_length_test_dm_error_rad = target_dm_rad - feedback_dm_rad;
+      g_kin_length_test_dm_send_status = dm_send_status;
+      g_kin_length_test_rx_count = g_dm_rx_count;
+      g_kin_length_test_status = status;
+      g_kin_length_test_target_forward_status = target_forward_status;
+      g_kin_length_test_feedback_forward_status = feedback_forward_status;
+      g_kin_length_test_inverse_result = inverse_result;
+      g_kin_length_test_target_forward_result = target_forward_result;
+      g_kin_length_test_feedback_forward_result = feedback_forward_result;
+
       app_background();
-      HAL_Delay(LEFT_DM_TEST_DM_SEND_MS);
+      HAL_Delay(KIN_LENGTH_TEST_DM_SEND_MS);
     }
 
-    g_left_dm_test_ft_update_status = feetech_servo_update(APP_FT_LEFT);
-    g_left_dm_test_cycle_count++;
-    left_dm_test_index++;
-    if (left_dm_test_index >= (sizeof(left_dm_test_targets) / sizeof(left_dm_test_targets[0]))) {
-      left_dm_test_index = 0U;
+    g_kin_length_test_ft_update_status = feetech_servo_update(APP_FT_LEFT);
+    g_kin_length_test_cycle_count++;
+
+    kin_length_test_index++;
+    if (kin_length_test_index >=
+        (sizeof(kin_length_test_targets_mm) / sizeof(kin_length_test_targets_mm[0]))) {
+      kin_length_test_index = 0U;
     }
+
     /* USER CODE END WHILE */
     app_background();
     /* USER CODE BEGIN 3 */
