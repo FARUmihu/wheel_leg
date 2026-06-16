@@ -65,6 +65,27 @@ if (leg_kinematics_fixed_ft_forward(LEG_SIDE_LEFT, 400, 0.0f, &r) == LEG_KINEMAT
 }
 ```
 
+飞特固定，只用 DM 追目标腿长：
+
+```c
+float dm_rad;
+leg_kinematics_result_t r;
+
+leg_kinematics_status_t st =
+    leg_kinematics_fixed_ft_inverse_length(LEG_SIDE_LEFT,
+                                           400,
+                                           180.0f,
+                                           g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX].pos,
+                                           &dm_rad,
+                                           &r);
+
+if (st == LEG_KINEMATICS_OK) {
+    /* dm_rad 是要发给 DM4310 的目标位置 */
+}
+```
+
+这个函数只接受一个标量目标 `target_length_mm = sqrt(D.x^2 + D.y^2)`，适合“飞特慢/固定，DM 快速调腿长”的阶段。内部只使用非交叉分支；如果目标腿长在当前固定飞特姿态下不可达，会返回最近点并给 `LEG_KINEMATICS_LIMIT`。`preferred_dm_rad` 用当前反馈或上一次目标，遇到多解时选离它最近的解。
+
 ## 逆解怎么用
 
 足端 D 转 `theta1/theta2`：

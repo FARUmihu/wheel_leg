@@ -30,6 +30,9 @@
 #define LEG_DM_RAD_MAX       2.22f
 #define LEG_DM_RAD_SPAN      (LEG_DM_RAD_MAX - LEG_DM_RAD_MIN)
 #define LEG_PI 3.14159265358979323846f
+#define LEG_FIXED_FT_INV_SAMPLES 222U
+#define LEG_FIXED_FT_LENGTH_TOL_MM 0.5f
+#define LEG_FIXED_FT_ROOT_ITERS 24U
 
 typedef struct {
     leg_point_t a;
@@ -91,6 +94,11 @@ static float point_distance(leg_point_t p0, leg_point_t p1)
     float dx = p1.x_mm - p0.x_mm;
     float dy = p1.y_mm - p0.y_mm;
     return sqrtf(dx * dx + dy * dy);
+}
+
+static float point_length_from_origin(leg_point_t p)
+{
+    return sqrtf(p.x_mm * p.x_mm + p.y_mm * p.y_mm);
 }
 
 static float cross2d(float ax, float ay, float bx, float by)
@@ -269,6 +277,81 @@ static float theta2_from_b(leg_side_t side, leg_point_t b, leg_point_t o2)
     return rad_to_deg(atan2f(b.y_mm - o2.y_mm, b.x_mm - o2.x_mm));
 }
 
+static leg_kinematics_status_t leg_forward_best_candidate_from_angles(
+    leg_side_t side,
+    const leg_joint_angles_t *joint,
+    leg_kinematics_result_t *result,
+    leg_candidate_t *best_out)
+{
+    if ((joint == 0) || (result == 0) || !leg_side_is_valid(side)) {
+        return LEG_KINEMATICS_BAD_ARGUMENT;
+    }
+
+    leg_point_t o1;
+    leg_point_t o2;
+    leg_get_origins(side, &o1, &o2);
+
+    float t1 = deg_to_rad(joint->theta1_deg);
+    float t2 = deg_to_rad(joint->theta2_deg);
+
+    leg_point_t a;
+    leg_point_t b;
+
+    if (side == LEG_SIDE_LEFT) {
+        a = point_make(o1.x_mm - LEG_L1_MM * sinf(t1),
+                       o1.y_mm + LEG_L1_MM * cosf(t1));
+        b = point_make(o2.x_mm - LEG_L2_MM * cosf(t2),
+                       o2.y_mm + LEG_L2_MM * sinf(t2));
+    } else {
+        a = point_make(o1.x_mm + LEG_L1_MM * sinf(t1),
+                       o1.y_mm + LEG_L1_MM * cosf(t1));
+        b = point_make(o2.x_mm + LEG_L2_MM * cosf(t2),
+                       o2.y_mm + LEG_L2_MM * sinf(t2));
+    }
+
+    leg_point_t c_candidates[2];
+    uint8_t c_count = circle_intersections(a, LEG_L3_MM, b, LEG_L4_MM, c_candidates);
+
+    result->joint = *joint;
+    result->foot_d = point_make(0.0f, 0.0f);
+
+    if (c_count == 0U) {
+        return LEG_KINEMATICS_UNREACHABLE;
+    }
+
+    leg_candidate_t best;
+    uint8_t best_valid = 0U;
+
+    for (uint8_t i = 0; i < c_count; i++) {
+        leg_candidate_t candidate;
+        candidate.a = a;
+        candidate.b = b;
+        candidate.c = c_candidates[i];
+        candidate.d = solve_d_from_b_c(b, c_candidates[i]);
+        candidate.joint = *joint;
+        candidate.cross_count = leg_cross_count(o1, a, o2, b, candidate.c, candidate.d);
+        candidate.limit_count = angle_limit_count(*joint);
+        candidate.limit_penalty = angle_limit_penalty(*joint);
+
+        if ((best_valid == 0U) || candidate_is_better(&candidate, &best)) {
+            best = candidate;
+            best_valid = 1U;
+        }
+    }
+
+    result->foot_d = best.d;
+
+    if (best_out != 0) {
+        *best_out = best;
+    }
+
+    if (best.limit_count > 0U) {
+        return LEG_KINEMATICS_LIMIT;
+    }
+
+    return LEG_KINEMATICS_OK;
+}
+
 float leg_kinematics_ft_raw_to_theta1_deg(leg_side_t side, uint16_t raw)
 {
     if (side == LEG_SIDE_LEFT) {
@@ -330,69 +413,7 @@ leg_kinematics_status_t leg_kinematics_forward_from_angles(leg_side_t side,
                                                            const leg_joint_angles_t *joint,
                                                            leg_kinematics_result_t *result)
 {
-    if ((joint == 0) || (result == 0) || !leg_side_is_valid(side)) {
-        return LEG_KINEMATICS_BAD_ARGUMENT;
-    }
-
-    leg_point_t o1;
-    leg_point_t o2;
-    leg_get_origins(side, &o1, &o2);
-
-    float t1 = deg_to_rad(joint->theta1_deg);
-    float t2 = deg_to_rad(joint->theta2_deg);
-
-    leg_point_t a;
-    leg_point_t b;
-
-    if (side == LEG_SIDE_LEFT) {
-        a = point_make(o1.x_mm - LEG_L1_MM * sinf(t1),
-                       o1.y_mm + LEG_L1_MM * cosf(t1));
-        b = point_make(o2.x_mm - LEG_L2_MM * cosf(t2),
-                       o2.y_mm + LEG_L2_MM * sinf(t2));
-    } else {
-        a = point_make(o1.x_mm + LEG_L1_MM * sinf(t1),
-                       o1.y_mm + LEG_L1_MM * cosf(t1));
-        b = point_make(o2.x_mm + LEG_L2_MM * cosf(t2),
-                       o2.y_mm + LEG_L2_MM * sinf(t2));
-    }
-
-    leg_point_t c_candidates[2];
-    uint8_t c_count = circle_intersections(a, LEG_L3_MM, b, LEG_L4_MM, c_candidates);
-
-    result->joint = *joint;
-    result->foot_d = point_make(0.0f, 0.0f);
-
-    if (c_count == 0U) {
-        return LEG_KINEMATICS_UNREACHABLE;
-    }
-
-    leg_candidate_t best;
-    uint8_t best_valid = 0U;
-
-    for (uint8_t i = 0; i < c_count; i++) {
-        leg_candidate_t candidate;
-        candidate.a = a;
-        candidate.b = b;
-        candidate.c = c_candidates[i];
-        candidate.d = solve_d_from_b_c(b, c_candidates[i]);
-        candidate.joint = *joint;
-        candidate.cross_count = leg_cross_count(o1, a, o2, b, candidate.c, candidate.d);
-        candidate.limit_count = angle_limit_count(*joint);
-        candidate.limit_penalty = angle_limit_penalty(*joint);
-
-        if ((best_valid == 0U) || candidate_is_better(&candidate, &best)) {
-            best = candidate;
-            best_valid = 1U;
-        }
-    }
-
-    result->foot_d = best.d;
-
-    if (best.limit_count > 0U) {
-        return LEG_KINEMATICS_LIMIT;
-    }
-
-    return LEG_KINEMATICS_OK;
+    return leg_forward_best_candidate_from_angles(side, joint, result, 0);
 }
 
 leg_kinematics_status_t leg_kinematics_inverse_to_angles(leg_side_t side,
@@ -483,6 +504,61 @@ leg_kinematics_status_t leg_kinematics_forward_from_actuator(leg_side_t side,
     return leg_kinematics_forward_from_angles(side, &joint, result);
 }
 
+static float leg_clamp_dm_rad(float dm_rad)
+{
+    return clampf_local(dm_rad, LEG_DM_RAD_MIN, LEG_DM_RAD_MAX);
+}
+
+static uint8_t leg_fixed_ft_eval_length(leg_side_t side,
+                                        uint16_t fixed_ft_raw,
+                                        float dm_rad,
+                                        leg_kinematics_result_t *result,
+                                        float *length_mm)
+{
+    leg_joint_angles_t joint;
+    leg_kinematics_result_t local_result;
+    leg_candidate_t candidate;
+
+    joint.theta1_deg = leg_kinematics_ft_raw_to_theta1_deg(side, fixed_ft_raw);
+    joint.theta2_deg = leg_kinematics_dm_rad_to_theta2_deg(side, dm_rad);
+
+    leg_kinematics_status_t st =
+        leg_forward_best_candidate_from_angles(side, &joint, &local_result, &candidate);
+
+    if ((st != LEG_KINEMATICS_OK) || (candidate.cross_count != 0U)) {
+        return 0U;
+    }
+
+    if (result != 0) {
+        *result = local_result;
+    }
+    if (length_mm != 0) {
+        *length_mm = point_length_from_origin(local_result.foot_d);
+    }
+
+    return 1U;
+}
+
+static uint8_t leg_fixed_ft_candidate_is_better(float error_mm,
+                                                float dm_rad,
+                                                float best_error_mm,
+                                                float best_dm_rad,
+                                                float preferred_dm_rad)
+{
+    const float eps = 1.0e-4f;
+
+    if (error_mm < (best_error_mm - eps)) {
+        return 1U;
+    }
+    if (error_mm > (best_error_mm + eps)) {
+        return 0U;
+    }
+
+    float preferred_dist = fabsf(dm_rad - preferred_dm_rad);
+    float best_preferred_dist = fabsf(best_dm_rad - preferred_dm_rad);
+    return (preferred_dist < best_preferred_dist) ? 1U : 0U;
+}
+
 leg_kinematics_status_t leg_kinematics_fixed_ft_forward(leg_side_t side,
                                                         uint16_t fixed_ft_raw,
                                                         float dm_rad,
@@ -492,6 +568,142 @@ leg_kinematics_status_t leg_kinematics_fixed_ft_forward(leg_side_t side,
     actuator.ft_raw = fixed_ft_raw;
     actuator.dm_rad = dm_rad;
     return leg_kinematics_forward_from_actuator(side, &actuator, result);
+}
+
+leg_kinematics_status_t leg_kinematics_fixed_ft_inverse_length(leg_side_t side,
+                                                               uint16_t fixed_ft_raw,
+                                                               float target_length_mm,
+                                                               float preferred_dm_rad,
+                                                               float *dm_rad,
+                                                               leg_kinematics_result_t *result)
+{
+    if ((dm_rad == 0) || (result == 0) || !leg_side_is_valid(side) ||
+        (target_length_mm <= 0.0f)) {
+        return LEG_KINEMATICS_BAD_ARGUMENT;
+    }
+
+    preferred_dm_rad = leg_clamp_dm_rad(preferred_dm_rad);
+
+    uint8_t best_valid = 0U;
+    float best_dm = preferred_dm_rad;
+    float best_error = 0.0f;
+    leg_kinematics_result_t best_result;
+
+    uint8_t root_valid = 0U;
+    float root_dm = preferred_dm_rad;
+    float root_error = 0.0f;
+    leg_kinematics_result_t root_result;
+
+    uint8_t prev_valid = 0U;
+    float prev_dm = 0.0f;
+    float prev_signed_error = 0.0f;
+
+    for (uint16_t i = 0U; i <= LEG_FIXED_FT_INV_SAMPLES; i++) {
+        float sample_dm = LEG_DM_RAD_MIN +
+                          (LEG_DM_RAD_SPAN * (float)i / (float)LEG_FIXED_FT_INV_SAMPLES);
+        float sample_length = 0.0f;
+        leg_kinematics_result_t sample_result;
+
+        uint8_t sample_valid =
+            leg_fixed_ft_eval_length(side, fixed_ft_raw, sample_dm,
+                                     &sample_result, &sample_length);
+
+        if (sample_valid == 0U) {
+            prev_valid = 0U;
+            continue;
+        }
+
+        float signed_error = sample_length - target_length_mm;
+        float abs_error = fabsf(signed_error);
+
+        if ((best_valid == 0U) ||
+            leg_fixed_ft_candidate_is_better(abs_error, sample_dm,
+                                             best_error, best_dm,
+                                             preferred_dm_rad)) {
+            best_valid = 1U;
+            best_dm = sample_dm;
+            best_error = abs_error;
+            best_result = sample_result;
+        }
+
+        if (abs_error <= LEG_FIXED_FT_LENGTH_TOL_MM) {
+            if ((root_valid == 0U) ||
+                leg_fixed_ft_candidate_is_better(abs_error, sample_dm,
+                                                 root_error, root_dm,
+                                                 preferred_dm_rad)) {
+                root_valid = 1U;
+                root_dm = sample_dm;
+                root_error = abs_error;
+                root_result = sample_result;
+            }
+        }
+
+        if ((prev_valid != 0U) &&
+            (((prev_signed_error <= 0.0f) && (signed_error >= 0.0f)) ||
+             ((prev_signed_error >= 0.0f) && (signed_error <= 0.0f)))) {
+            float lo = prev_dm;
+            float hi = sample_dm;
+            float lo_error = prev_signed_error;
+            leg_kinematics_result_t mid_result = sample_result;
+            float mid_length = sample_length;
+            float mid = sample_dm;
+
+            for (uint8_t iter = 0U; iter < LEG_FIXED_FT_ROOT_ITERS; iter++) {
+                mid = 0.5f * (lo + hi);
+
+                if (leg_fixed_ft_eval_length(side, fixed_ft_raw, mid,
+                                             &mid_result, &mid_length) == 0U) {
+                    break;
+                }
+
+                float mid_error = mid_length - target_length_mm;
+                if (((lo_error <= 0.0f) && (mid_error >= 0.0f)) ||
+                    ((lo_error >= 0.0f) && (mid_error <= 0.0f))) {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                    lo_error = mid_error;
+                }
+            }
+
+            if (leg_fixed_ft_eval_length(side, fixed_ft_raw, mid,
+                                         &mid_result, &mid_length) != 0U) {
+                float mid_abs_error = fabsf(mid_length - target_length_mm);
+
+                if ((root_valid == 0U) ||
+                    leg_fixed_ft_candidate_is_better(mid_abs_error, mid,
+                                                     root_error, root_dm,
+                                                     preferred_dm_rad)) {
+                    root_valid = 1U;
+                    root_dm = mid;
+                    root_error = mid_abs_error;
+                    root_result = mid_result;
+                }
+            }
+        }
+
+        prev_valid = 1U;
+        prev_dm = sample_dm;
+        prev_signed_error = signed_error;
+    }
+
+    if (root_valid != 0U) {
+        *dm_rad = root_dm;
+        *result = root_result;
+        return LEG_KINEMATICS_OK;
+    }
+
+    if (best_valid != 0U) {
+        *dm_rad = best_dm;
+        *result = best_result;
+        return LEG_KINEMATICS_LIMIT;
+    }
+
+    *dm_rad = preferred_dm_rad;
+    result->foot_d = point_make(0.0f, 0.0f);
+    result->joint.theta1_deg = leg_kinematics_ft_raw_to_theta1_deg(side, fixed_ft_raw);
+    result->joint.theta2_deg = leg_kinematics_dm_rad_to_theta2_deg(side, preferred_dm_rad);
+    return LEG_KINEMATICS_UNREACHABLE;
 }
 
 leg_kinematics_status_t leg_kinematics_inverse_to_actuator(leg_side_t side,

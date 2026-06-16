@@ -58,6 +58,20 @@ leg_kinematics_status_t leg_kinematics_fixed_ft_forward(leg_side_t side,
                                                         float dm_rad,
                                                         leg_kinematics_result_t *result);
 
+/*
+ * Fixed-Feetech inverse for the DM-only stage.
+ * target_length_mm is sqrt(D.x^2 + D.y^2). If several DM positions can reach
+ * the same length, preferred_dm_rad selects the nearest continuous solution.
+ * Returns OK for a reachable length, LIMIT with the nearest non-crossing point
+ * when the length is outside the fixed-Feetech reachable range.
+ */
+leg_kinematics_status_t leg_kinematics_fixed_ft_inverse_length(leg_side_t side,
+                                                               uint16_t fixed_ft_raw,
+                                                               float target_length_mm,
+                                                               float preferred_dm_rad,
+                                                               float *dm_rad,
+                                                               leg_kinematics_result_t *result);
+
 leg_kinematics_status_t leg_kinematics_inverse_to_actuator(leg_side_t side,
                                                            const leg_point_t *foot_d,
                                                            leg_actuator_state_t *actuator,
