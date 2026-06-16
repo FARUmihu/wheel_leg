@@ -12,13 +12,22 @@
 
 | 逻辑名 | 侧 | 类型 | 总线 | ID/地址 | 备注 |
 |---|---|---|---|---|---|
-| left_joint_ft | 左 | 飞特舵机 | USART1 | 0 | 并联腿关节 A |
+| left_joint_ft | 左 | 飞特舵机 | USART2 | 0 | 并联腿关节 A |
 | left_joint_dm | 左 | DM4310 | CAN2 | 1 | 并联腿关节 B |
 | left_wheel | 左 | DM3510 | CAN2 | 2 | 轮毂 |
-| right_joint_ft | 右 | 飞特舵机 | USART1 | 3 | 并联腿关节 A |
+| right_joint_ft | 右 | 飞特舵机 | USART2 | 3 | 并联腿关节 A |
 | right_joint_dm | 右 | DM4310 | CAN2 | 4 | 并联腿关节 B |
 | right_wheel | 右 | DM3510 | CAN2 | 5 | 轮毂 |
 | imu | 中央 | DM-IMU | CAN1 | CAN_ID=6, MST_ID=0x00 | 姿态 |
+
+## 关节标定映射
+
+| 执行器 | ID | 原始反馈/命令 | 机构角 |
+|---|---:|---|---|
+| left_joint_ft | 0 | raw 32 -> 1005 | theta1 25 deg -> -180 deg |
+| right_joint_ft | 3 | raw 999 -> 25 | theta1 25 deg -> -180 deg |
+| left_joint_dm | 1 | 0.00 rad -> 2.22 rad | theta2 -45 deg -> -170 deg |
+| right_joint_dm | 4 | 0.00 rad -> 2.22 rad | theta2 -170 deg -> -45 deg |
 
 ## 执行器方向
 

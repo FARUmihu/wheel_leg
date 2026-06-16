@@ -16,7 +16,7 @@
    验收：`make -C Debug -j` 能稳定通过，烧录后能进入 `main`。
 
 2. 分执行器硬件自检  
-   分别验证 CAN1 IMU、CAN2 上的 2 个 DM4310 + 2 个 DM3510、USART1 上的 2 个飞特舵机。  
+   分别验证 CAN1 IMU、CAN2 上的 2 个 DM4310 + 2 个 DM3510、USART2 上的 2 个飞特舵机。  
    验收：各总线有反馈计数、无 bus-off、无异常超时。
 
 3. 建 `user/app` 调度层  

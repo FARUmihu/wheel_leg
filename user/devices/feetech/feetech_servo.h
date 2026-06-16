@@ -5,10 +5,9 @@
 #include <stdint.h>
 
 /* ── USART 句柄 ──────────────────────────────────────────────────
- * CubeMX 配置好 USART 后改为实际句柄名（如 huart1）
- * 飞特 SCSCL 系列波特率：1 Mbps，8N1
+ * 当前飞特舵机总线使用 USART2，波特率 1 Mbps，8N1。
  * ────────────────────────────────────────────────────────────── */
-#define FEETECH_HUART  huart2   /* CubeMX 配置好 USART 后改为实际句柄名 */
+#define FEETECH_HUART  huart2
 
 /* ── 舵机 ID ─────────────────────────────────────────────────── */
 #define FEETECH_ID_LEFT   0

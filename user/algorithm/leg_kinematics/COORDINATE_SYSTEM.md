@@ -144,11 +144,11 @@ theta2: -170 deg ~ -45 deg
 当前标定为线性映射：
 
 ```text
-id = 0, 左腿:
+id = 0, 左腿飞特:
 raw 32   -> theta1  25 deg
 raw 1005 -> theta1 -180 deg
 
-id = 3, 右腿:
+id = 3, 右腿飞特:
 raw 999 -> theta1  25 deg
 raw 25  -> theta1 -180 deg
 ```
@@ -165,11 +165,11 @@ raw 25  -> theta1 -180 deg
 DM 侧当前也做了左右镜像：
 
 ```text
-左腿:
-dm_rad 2.22 -> theta2 -170 deg
+id = 1, 左腿 DM4310:
 dm_rad 0.00 -> theta2  -45 deg
+dm_rad 2.22 -> theta2 -170 deg
 
-右腿:
+id = 4, 右腿 DM4310:
 dm_rad 0.00 -> theta2 -170 deg
 dm_rad 2.22 -> theta2  -45 deg
 ```

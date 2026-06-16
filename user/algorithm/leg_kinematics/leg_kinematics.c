@@ -18,8 +18,10 @@
 
 #define LEG_FT_THETA_SPAN   205.0f
 
+/* Feetech id 0: raw 32 -> 25 deg, raw 1005 -> -180 deg. */
 #define LEG_FT0_RAW_THETA_MAX   32.0f
 #define LEG_FT0_RAW_THETA_MIN 1005.0f
+/* Feetech id 3: raw 999 -> 25 deg, raw 25 -> -180 deg. */
 #define LEG_FT3_RAW_THETA_MAX  999.0f
 #define LEG_FT3_RAW_THETA_MIN   25.0f
 

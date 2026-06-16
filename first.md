@@ -33,13 +33,20 @@
 
 | 逻辑名 | 类型 | 总线 | ID/地址 |
 |---|---|---|---|
-| `left_joint_ft` | 飞特舵机 | USART1 | 0 |
+| `left_joint_ft` | 飞特舵机 | USART2 | 0 |
 | `left_joint_dm` | DM4310 | CAN2 | 1 |
 | `left_wheel` | DM3510 | CAN2 | 2 |
-| `right_joint_ft` | 飞特舵机 | USART1 | 3 |
+| `right_joint_ft` | 飞特舵机 | USART2 | 3 |
 | `right_joint_dm` | DM4310 | CAN2 | 4 |
 | `right_wheel` | DM3510 | CAN2 | 5 |
 | `imu` | DM-IMU | CAN1 | `CAN_ID=6`, `MST_ID=0x00` |
+
+关节标定映射：
+
+- 飞特 id 0：`raw=32 -> theta1=25 deg`，`raw=1005 -> theta1=-180 deg`。
+- 飞特 id 3：`raw=999 -> theta1=25 deg`，`raw=25 -> theta1=-180 deg`。
+- DM4310 id 1：`0.00 rad -> theta2=-45 deg`，`2.22 rad -> theta2=-170 deg`。
+- DM4310 id 4：`0.00 rad -> theta2=-170 deg`，`2.22 rad -> theta2=-45 deg`。
 
 方向约定：
 

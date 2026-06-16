@@ -45,7 +45,7 @@ if (leg_kinematics_forward_from_angles(LEG_SIDE_LEFT, &joint, &r) == LEG_KINEMAT
 
 ```c
 leg_actuator_state_t a = {
-    .ft_raw = 0,
+    .ft_raw = 400,
     .dm_rad = 0.0f,
 };
 leg_kinematics_result_t r;
@@ -60,7 +60,7 @@ if (leg_kinematics_forward_from_actuator(LEG_SIDE_LEFT, &a, &r) == LEG_KINEMATIC
 ```c
 leg_kinematics_result_t r;
 
-if (leg_kinematics_fixed_ft_forward(LEG_SIDE_LEFT, 0, 0.0f, &r) == LEG_KINEMATICS_OK) {
+if (leg_kinematics_fixed_ft_forward(LEG_SIDE_LEFT, 400, 0.0f, &r) == LEG_KINEMATICS_OK) {
     /* 看 r.foot_d.x_mm / r.foot_d.y_mm */
 }
 ```
@@ -100,15 +100,15 @@ if (leg_kinematics_inverse_to_actuator(LEG_SIDE_LEFT, &d, &a, &r) == LEG_KINEMAT
 
 ## 映射
 
-- 飞特 3：`raw=0 -> theta1=25 deg`，`raw=938 -> theta1=-180 deg`。
-- 飞特 0：现在先按飞特 3 一样算。
-- 左腿 DM：`2.22 rad -> theta2=-170 deg`，`0 rad -> theta2=-45 deg`。
-- 右腿 DM：`0 rad -> theta2=-170 deg`，`2.22 rad -> theta2=-45 deg`。
+- 飞特 id 0（左腿）：`raw=32 -> theta1=25 deg`，`raw=1005 -> theta1=-180 deg`。
+- 飞特 id 3（右腿）：`raw=999 -> theta1=25 deg`，`raw=25 -> theta1=-180 deg`。
+- DM4310 id 1（左腿）：`0.00 rad -> theta2=-45 deg`，`2.22 rad -> theta2=-170 deg`。
+- DM4310 id 4（右腿）：`0.00 rad -> theta2=-170 deg`，`2.22 rad -> theta2=-45 deg`。
 
 ## 别干这些
 
 - `usable=0` 时，不要拿 `D/theta1/theta2` 去驱动硬件。
-- 舵机 0 安全范围没确认前，不要让它按逆解结果跑。
+- 舵机 id 0 按 `32 -> 25 deg`、`1005 -> -180 deg` 的实测标定换算。
 - 不要一上来同时驱动整条腿。
 - 先固定飞特，只测 DM。
 - 这个模块现在只回填观测量，不会自动控制电机。

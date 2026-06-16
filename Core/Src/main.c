@@ -39,12 +39,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define IK_TEST_DM_KP          6.0f
-#define IK_TEST_DM_KD          0.15f
-#define IK_TEST_FT_SPEED       130U
-#define IK_TEST_FT_ACC         10U
-#define IK_TEST_PERIOD_MS      1800U
-#define IK_TEST_DM_SEND_MS     10U
+#define LEFT_DM_TEST_FT_RAW         700U
+#define LEFT_DM_TEST_FT_SPEED       130U
+#define LEFT_DM_TEST_FT_ACC         10U
+#define LEFT_DM_TEST_PERIOD_MS      1800U
+#define LEFT_DM_TEST_DM_SEND_MS     10U
+#define LEFT_DM_TEST_TOLERANCE_RAD  0.05f
 
 /* USER CODE END PD */
 
@@ -56,46 +56,29 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static const leg_point_t left_ik_test_points[] = {
-  { -75.0f, -165.0f },
-  { -80.0f, -180.0f },
-  { -75.0f, -195.0f },
-  { -65.0f, -205.0f },
-  { -45.0f, -210.0f },
-  { -30.0f, -200.0f },
-  { -25.0f, -185.0f },
-  { -35.0f, -170.0f },
-  { -55.0f, -160.0f },
-  { -70.0f, -155.0f },
+static const float left_dm_test_targets[] = {
+  0.90f,
+  1.10f,
+  1.30f,
 };
 
-static const leg_point_t right_ik_test_points[] = {
-  { 75.0f, -165.0f },
-  { 80.0f, -180.0f },
-  { 75.0f, -195.0f },
-  { 65.0f, -205.0f },
-  { 45.0f, -210.0f },
-  { 30.0f, -200.0f },
-  { 25.0f, -185.0f },
-  { 35.0f, -170.0f },
-  { 55.0f, -160.0f },
-  { 70.0f, -155.0f },
-};
+static uint8_t left_dm_test_index = 0U;
 
-static uint8_t ik_test_index = 0U;
-
-volatile leg_point_t g_left_ik_test_target;
-volatile leg_point_t g_right_ik_test_target;
-volatile leg_actuator_state_t g_left_ik_test_actuator;
-volatile leg_actuator_state_t g_right_ik_test_actuator;
-volatile leg_kinematics_result_t g_left_ik_test_result;
-volatile leg_kinematics_result_t g_right_ik_test_result;
-volatile leg_kinematics_status_t g_left_ik_test_status;
-volatile leg_kinematics_status_t g_right_ik_test_status;
-volatile uint8_t g_left_ik_test_dm_send_status;
-volatile uint8_t g_right_ik_test_dm_send_status;
-volatile int g_left_ik_test_ft_update_status;
-volatile int g_right_ik_test_ft_update_status;
+volatile float g_left_dm_test_kp = 10.0f;
+volatile float g_left_dm_test_kd = 0.20f;
+volatile float g_left_dm_test_target_rad;
+volatile float g_left_dm_test_feedback_rad;
+volatile float g_left_dm_test_error_rad;
+volatile uint8_t g_left_dm_test_in_tolerance;
+volatile uint8_t g_left_dm_test_dm_send_status;
+volatile int g_left_dm_test_ft_update_status;
+volatile uint32_t g_left_dm_test_cycle_count;
+volatile uint32_t g_left_dm_test_can2_error_code;
+volatile uint32_t g_left_dm_test_can2_tsr;
+volatile uint32_t g_left_dm_test_can2_esr;
+volatile uint32_t g_left_dm_test_rx_count;
+volatile leg_kinematics_result_t g_left_dm_test_fk_result;
+volatile leg_kinematics_status_t g_left_dm_test_fk_status;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,6 +89,10 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static float absf_local(float x)
+{
+  return (x < 0.0f) ? -x : x;
+}
 
 /* USER CODE END 0 */
 
@@ -148,9 +135,11 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_Delay(3000);
   dm_motor_enable(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX]);
-  dm_motor_enable(&g_dm_motors[DM_MOTOR_RIGHT_JOINT_IDX]);
   feetech_servo_enable(FEETECH_ID_LEFT);
-  feetech_servo_enable(FEETECH_ID_RIGHT);
+  feetech_servo_set_pos(FEETECH_ID_LEFT,
+                        LEFT_DM_TEST_FT_RAW,
+                        LEFT_DM_TEST_FT_SPEED,
+                        LEFT_DM_TEST_FT_ACC);
   HAL_Delay(1000);
   /* USER CODE END 2 */
 
@@ -158,67 +147,47 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    leg_point_t left_target = left_ik_test_points[ik_test_index];
-    leg_point_t right_target = right_ik_test_points[ik_test_index];
-    leg_actuator_state_t left_actuator = {0};
-    leg_actuator_state_t right_actuator = {0};
-    leg_kinematics_result_t left_result = {0};
-    leg_kinematics_result_t right_result = {0};
-    leg_kinematics_status_t left_status =
-        leg_kinematics_inverse_to_actuator(LEG_SIDE_LEFT,
-                                           &left_target,
-                                           &left_actuator,
-                                           &left_result);
-    leg_kinematics_status_t right_status =
-        leg_kinematics_inverse_to_actuator(LEG_SIDE_RIGHT,
-                                           &right_target,
-                                           &right_actuator,
-                                           &right_result);
+    float target_rad = left_dm_test_targets[left_dm_test_index];
+    uint32_t start_ms = HAL_GetTick();
 
-    g_left_ik_test_target = left_target;
-    g_right_ik_test_target = right_target;
-    g_left_ik_test_actuator = left_actuator;
-    g_right_ik_test_actuator = right_actuator;
-    g_left_ik_test_result = left_result;
-    g_right_ik_test_result = right_result;
-    g_left_ik_test_status = left_status;
-    g_right_ik_test_status = right_status;
+    g_left_dm_test_target_rad = target_rad;
 
-    if ((left_status == LEG_KINEMATICS_OK) &&
-        (right_status == LEG_KINEMATICS_OK)) {
-      feetech_servo_sync_set_pos(left_actuator.ft_raw,
-                                 right_actuator.ft_raw,
-                                 IK_TEST_FT_SPEED,
-                                 IK_TEST_FT_ACC);
-      g_left_ik_test_ft_update_status = feetech_servo_update(APP_FT_LEFT);
-      g_right_ik_test_ft_update_status = feetech_servo_update(APP_FT_RIGHT);
+    while ((HAL_GetTick() - start_ms) < LEFT_DM_TEST_PERIOD_MS) {
+      leg_kinematics_result_t fk_result = {0};
+      float feedback_rad = g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX].pos;
+      float error_rad = target_rad - feedback_rad;
 
-      uint32_t start_ms = HAL_GetTick();
-      while ((HAL_GetTick() - start_ms) < IK_TEST_PERIOD_MS) {
-        g_left_ik_test_dm_send_status =
-            dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX],
-                              left_actuator.dm_rad,
-                              0.0f,
-                              IK_TEST_DM_KP,
-                              IK_TEST_DM_KD,
-                              0.0f);
-        g_right_ik_test_dm_send_status =
-            dm_motor_send_mit(&g_dm_motors[DM_MOTOR_RIGHT_JOINT_IDX],
-                              right_actuator.dm_rad,
-                              0.0f,
-                              IK_TEST_DM_KP,
-                              IK_TEST_DM_KD,
-                              0.0f);
-        app_background();
-        HAL_Delay(IK_TEST_DM_SEND_MS);
-      }
-    } else {
-      HAL_Delay(IK_TEST_PERIOD_MS);
+      g_left_dm_test_dm_send_status =
+          dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX],
+                            target_rad,
+                            0.0f,
+                            g_left_dm_test_kp,
+                            g_left_dm_test_kd,
+                            0.0f);
+
+      g_left_dm_test_feedback_rad = feedback_rad;
+      g_left_dm_test_error_rad = error_rad;
+      g_left_dm_test_in_tolerance =
+          (absf_local(error_rad) <= LEFT_DM_TEST_TOLERANCE_RAD) ? 1U : 0U;
+      g_left_dm_test_fk_status =
+          leg_kinematics_fixed_ft_forward(LEG_SIDE_LEFT,
+                                          LEFT_DM_TEST_FT_RAW,
+                                          feedback_rad,
+                                          &fk_result);
+      g_left_dm_test_fk_result = fk_result;
+      g_left_dm_test_can2_error_code = hcan2.ErrorCode;
+      g_left_dm_test_can2_tsr = hcan2.Instance->TSR;
+      g_left_dm_test_can2_esr = hcan2.Instance->ESR;
+      g_left_dm_test_rx_count = g_dm_rx_count;
+      app_background();
+      HAL_Delay(LEFT_DM_TEST_DM_SEND_MS);
     }
 
-    ik_test_index++;
-    if (ik_test_index >= (sizeof(right_ik_test_points) / sizeof(right_ik_test_points[0]))) {
-      ik_test_index = 0U;
+    g_left_dm_test_ft_update_status = feetech_servo_update(APP_FT_LEFT);
+    g_left_dm_test_cycle_count++;
+    left_dm_test_index++;
+    if (left_dm_test_index >= (sizeof(left_dm_test_targets) / sizeof(left_dm_test_targets[0]))) {
+      left_dm_test_index = 0U;
     }
     /* USER CODE END WHILE */
     app_background();
