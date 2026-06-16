@@ -16,9 +16,12 @@
 #define LEG_THETA2_MIN_DEG (-170.0f)
 #define LEG_THETA2_MAX_DEG  (-45.0f)
 
-#define LEG_FT_RAW_MIN        0.0f
-#define LEG_FT_RAW_MAX      938.0f
 #define LEG_FT_THETA_SPAN   205.0f
+
+#define LEG_FT0_RAW_THETA_MAX   32.0f
+#define LEG_FT0_RAW_THETA_MIN 1005.0f
+#define LEG_FT3_RAW_THETA_MAX  999.0f
+#define LEG_FT3_RAW_THETA_MIN   25.0f
 
 #define LEG_THETA2_SPAN_DEG (LEG_THETA2_MAX_DEG - LEG_THETA2_MIN_DEG)
 #define LEG_DM_RAD_MIN       0.0f
@@ -63,9 +66,9 @@ static float clampf_local(float x, float min_value, float max_value)
     return x;
 }
 
-static uint16_t round_to_u16(float x)
+static uint16_t round_to_u16(float x, float min_value, float max_value)
 {
-    x = clampf_local(x, LEG_FT_RAW_MIN, LEG_FT_RAW_MAX);
+    x = clampf_local(x, min_value, max_value);
     return (uint16_t)(x + 0.5f);
 }
 
@@ -266,17 +269,34 @@ static float theta2_from_b(leg_side_t side, leg_point_t b, leg_point_t o2)
 
 float leg_kinematics_ft_raw_to_theta1_deg(leg_side_t side, uint16_t raw)
 {
-    /* FT0 and FT3 currently use the same raw angle calibration; side mirroring is geometric. */
-    (void)side;
-    return LEG_THETA1_MAX_DEG - ((float)raw * LEG_FT_THETA_SPAN / LEG_FT_RAW_MAX);
+    if (side == LEG_SIDE_LEFT) {
+        return LEG_THETA1_MAX_DEG -
+               (((float)raw - LEG_FT0_RAW_THETA_MAX) * LEG_FT_THETA_SPAN /
+                (LEG_FT0_RAW_THETA_MIN - LEG_FT0_RAW_THETA_MAX));
+    }
+
+    return LEG_THETA1_MIN_DEG +
+           (((float)raw - LEG_FT3_RAW_THETA_MIN) * LEG_FT_THETA_SPAN /
+            (LEG_FT3_RAW_THETA_MAX - LEG_FT3_RAW_THETA_MIN));
 }
 
 uint16_t leg_kinematics_theta1_deg_to_ft_raw(leg_side_t side, float theta1_deg)
 {
-    /* FT0 and FT3 currently use the same raw angle calibration; side mirroring is geometric. */
-    (void)side;
-    float raw = (LEG_THETA1_MAX_DEG - theta1_deg) * LEG_FT_RAW_MAX / LEG_FT_THETA_SPAN;
-    return round_to_u16(raw);
+    theta1_deg = clampf_local(theta1_deg, LEG_THETA1_MIN_DEG, LEG_THETA1_MAX_DEG);
+
+    if (side == LEG_SIDE_LEFT) {
+        float raw = LEG_FT0_RAW_THETA_MAX +
+                    ((LEG_THETA1_MAX_DEG - theta1_deg) *
+                     (LEG_FT0_RAW_THETA_MIN - LEG_FT0_RAW_THETA_MAX) /
+                     LEG_FT_THETA_SPAN);
+        return round_to_u16(raw, LEG_FT0_RAW_THETA_MAX, LEG_FT0_RAW_THETA_MIN);
+    }
+
+    float raw = LEG_FT3_RAW_THETA_MIN +
+                ((theta1_deg - LEG_THETA1_MIN_DEG) *
+                 (LEG_FT3_RAW_THETA_MAX - LEG_FT3_RAW_THETA_MIN) /
+                 LEG_FT_THETA_SPAN);
+    return round_to_u16(raw, LEG_FT3_RAW_THETA_MIN, LEG_FT3_RAW_THETA_MAX);
 }
 
 float leg_kinematics_dm_rad_to_theta2_deg(leg_side_t side, float dm_rad)

@@ -2,6 +2,10 @@
 
 extern dm_motor_t g_dm_motors[4];
 
+volatile uint32_t g_dm_rx_count;
+volatile uint32_t g_dm_rx_last_id;
+volatile uint8_t g_dm_rx_last_len;
+
 /* ── 定点 ↔ 浮点 转换 ──────────────────────────────────────────── */
 
 static uint16_t float_to_uint(float x, float x_min, float x_max, int bits)
@@ -132,10 +136,17 @@ static void dm_motor_decode(dm_motor_t *m, const uint8_t *data)
 
 /* ── CAN RX 弱函数覆盖 ─────────────────────────────────────────── */
 
-static void dm_rx_dispatch(CAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
+static void dm_rx_dispatch(CAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data, uint8_t len)
 {
+    uint16_t feedback_id = (uint16_t)(data[0] & 0x0FU);
+
+    g_dm_rx_count++;
+    g_dm_rx_last_id = id;
+    g_dm_rx_last_len = len;
+
     for (int i = 0; i < 4; i++) {
-        if (g_dm_motors[i].hcan == hcan && g_dm_motors[i].id == (uint16_t)id) {
+        if ((g_dm_motors[i].hcan == hcan) &&
+            ((g_dm_motors[i].id == (uint16_t)id) || (g_dm_motors[i].id == feedback_id))) {
             dm_motor_decode(&g_dm_motors[i], data);
             return;
         }
@@ -146,5 +157,5 @@ static void dm_rx_dispatch(CAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
 
 void bsp_can2_rx_callback(uint32_t id, uint8_t *data, uint8_t len)
 {
-    dm_rx_dispatch(&hcan2, id, data);
+    dm_rx_dispatch(&hcan2, id, data, len);
 }

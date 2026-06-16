@@ -32,7 +32,9 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/usart.h ../Core/Inc/gpio.h \
  C:/Users/FMI/Documents/GitHub/wheel_leg/user/app/app.h \
  C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h
+ C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h \
+ C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/feetech/feetech_servo.h \
+ C:/Users/FMI/Documents/GitHub/wheel_leg/user/algorithm/leg_kinematics/leg_kinematics.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -72,3 +74,5 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/app/app.h:
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h:
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h:
+C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/feetech/feetech_servo.h:
+C:/Users/FMI/Documents/GitHub/wheel_leg/user/algorithm/leg_kinematics/leg_kinematics.h:
