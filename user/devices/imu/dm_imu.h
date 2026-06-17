@@ -8,8 +8,8 @@
  * IMU_CAN_ID : IMU 自身的 CAN ID（出厂默认 0x01，可通过上位机修改）
  * IMU_MST_ID : STM32 的 CAN ID（IMU 向此 ID 回复数据）
  * ────────────────────────────────────────────────────────────── */
-#define IMU_CAN_ID  0x06
-#define IMU_MST_ID  0x00
+#define IMU_CAN_ID  0x01
+#define IMU_MST_ID  0x11
 
 /* ── 数据量程（来自 DM-IMU 手册）────────────────────────────── */
 #define IMU_ACCEL_MAX   235.2f    /* m/s²  */
@@ -30,9 +30,20 @@ typedef struct {
     float yaw;        /* 偏航角 (°) */
     float gyro[3];    /* 角速度 xyz (rad/s) */
     float accel[3];   /* 加速度 xyz (m/s²)  */
+    uint32_t rx_count;
+    uint32_t can_rx_count;
+    uint32_t tx_count;
+    uint32_t tx_error_count;
+    uint32_t last_update_ms;
+    uint32_t last_can_id;
+    uint8_t last_type;
+    uint8_t last_len;
+    uint8_t last_tx_status;
+    uint8_t last_raw[8];
 } dm_imu_t;
 
 extern dm_imu_t g_imu;
+extern volatile uint16_t g_imu_can_id;
 
 /* ── 接口 ────────────────────────────────────────────────────── */
 
@@ -49,5 +60,6 @@ void imu_init(void);
  *         主动模式下通常不需要调用此函数。
  */
 void imu_request_data(void);
+uint8_t imu_is_online(uint32_t timeout_ms);
 
 #endif /* DM_IMU_H */

@@ -27,7 +27,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app.h"
-#include "dm_motor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -99,22 +98,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   app_init();
   HAL_TIM_Base_Start_IT(&htim6);
-
-  HAL_Delay(5000);
-  dm_motor_enable(&g_dm_motors[DM_MOTOR_RIGHT_WHEEL_IDX]);
-  HAL_Delay(5);
-  dm_motor_enable(&g_dm_motors[DM_MOTOR_LEFT_WHEEL_IDX]);
-  HAL_Delay(5);
-  dm_motor_send_mit(&g_dm_motors[DM_MOTOR_LEFT_WHEEL_IDX], 0.0f, 3.0f, 0.0f, 0.1f, 0.0f);
-  dm_motor_send_mit(&g_dm_motors[DM_MOTOR_RIGHT_WHEEL_IDX], 0.0f, 3.0f, 0.0f, 0.1f, 0.0f);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_Delay(1);
-
     /* USER CODE END WHILE */
     app_background();
     /* USER CODE BEGIN 3 */

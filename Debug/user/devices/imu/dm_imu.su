@@ -1,8 +1,9 @@
-../user/devices/imu/dm_imu.c:8:14:uint_to_float	24	static
-../user/devices/imu/dm_imu.c:15:13:imu_send_cmd	24	static
-../user/devices/imu/dm_imu.c:27:13:imu_decode_accel	16	static
-../user/devices/imu/dm_imu.c:34:13:imu_decode_gyro	16	static
-../user/devices/imu/dm_imu.c:41:13:imu_decode_euler	16	static
-../user/devices/imu/dm_imu.c:50:6:bsp_can1_rx_callback	24	static
-../user/devices/imu/dm_imu.c:64:6:imu_init	8	static
-../user/devices/imu/dm_imu.c:70:6:imu_request_data	8	static
+../user/devices/imu/dm_imu.c:9:14:uint_to_float	24	static
+../user/devices/imu/dm_imu.c:16:13:imu_send_cmd	24	static
+../user/devices/imu/dm_imu.c:33:13:imu_decode_accel	16	static
+../user/devices/imu/dm_imu.c:40:13:imu_decode_gyro	16	static
+../user/devices/imu/dm_imu.c:47:13:imu_decode_euler	16	static
+../user/devices/imu/dm_imu.c:56:6:bsp_can1_rx_callback	32	static
+../user/devices/imu/dm_imu.c:84:6:imu_init	16	static
+../user/devices/imu/dm_imu.c:103:6:imu_request_data	8	static
+../user/devices/imu/dm_imu.c:111:9:imu_is_online	16	static

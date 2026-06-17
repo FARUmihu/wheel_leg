@@ -86,6 +86,15 @@ typedef struct {
     float yaw;
     float gyro[3];
     float accel[3];
+    uint32_t rx_count;
+    uint32_t can_rx_count;
+    uint32_t tx_count;
+    uint32_t tx_error_count;
+    uint32_t last_update_ms;
+    uint32_t last_can_id;
+    uint8_t online;
+    uint8_t last_type;
+    uint8_t last_tx_status;
 } app_imu_obs_t;
 
 typedef struct {
@@ -99,9 +108,20 @@ typedef struct {
 } app_leg_obs_t;
 
 typedef struct {
+    float pitch;
+    float roll;
+    float yaw;
+    float gyro[3];
+    float accel[3];
+    uint8_t online;
+    uint8_t zeroed;
+} app_body_attitude_obs_t;
+
+typedef struct {
     app_dm_obs_t dm[APP_DM_COUNT];
     app_ft_obs_t ft[APP_FT_COUNT];
     app_imu_obs_t imu;
+    app_body_attitude_obs_t body;
     app_leg_obs_t leg[APP_LEG_COUNT];
 } app_obs_t;
 
@@ -112,5 +132,7 @@ extern volatile app_obs_t g_app_obs;
 void app_init(void);
 void app_control_2khz(void);
 void app_background(void);
+uint8_t app_imu_zero_current(void);
+void app_imu_zero_clear(void);
 
 #endif /* APP_H */

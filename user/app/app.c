@@ -12,6 +12,12 @@ volatile app_status_t g_app_status;
 volatile app_cmd_t g_app_cmd;
 volatile app_obs_t g_app_obs;
 
+static uint32_t s_imu_request_ms;
+static float s_body_pitch_zero;
+static float s_body_roll_zero;
+static float s_body_yaw_zero;
+static uint8_t s_body_zeroed;
+
 _Static_assert(APP_DM_LEFT_JOINT == DM_MOTOR_LEFT_JOINT_IDX, "DM index mismatch");
 _Static_assert(APP_DM_RIGHT_JOINT == DM_MOTOR_RIGHT_JOINT_IDX, "DM index mismatch");
 _Static_assert(APP_DM_LEFT_WHEEL == DM_MOTOR_LEFT_WHEEL_IDX, "DM index mismatch");
@@ -50,6 +56,17 @@ static uint16_t app_ft_raw_from_servo(app_ft_index_t idx)
     }
 
     return (uint16_t)raw;
+}
+
+static float app_wrap_deg(float angle)
+{
+    while (angle > 180.0f) {
+        angle -= 360.0f;
+    }
+    while (angle < -180.0f) {
+        angle += 360.0f;
+    }
+    return angle;
 }
 
 static void app_obs_update_leg(app_leg_index_t leg_idx,
@@ -104,6 +121,25 @@ static void app_obs_update(void)
         g_app_obs.imu.gyro[i] = g_imu.gyro[i];
         g_app_obs.imu.accel[i] = g_imu.accel[i];
     }
+    g_app_obs.imu.rx_count = g_imu.rx_count;
+    g_app_obs.imu.can_rx_count = g_imu.can_rx_count;
+    g_app_obs.imu.tx_count = g_imu.tx_count;
+    g_app_obs.imu.tx_error_count = g_imu.tx_error_count;
+    g_app_obs.imu.last_update_ms = g_imu.last_update_ms;
+    g_app_obs.imu.last_can_id = g_imu.last_can_id;
+    g_app_obs.imu.online = imu_is_online(100U);
+    g_app_obs.imu.last_type = g_imu.last_type;
+    g_app_obs.imu.last_tx_status = g_imu.last_tx_status;
+
+    g_app_obs.body.pitch = app_wrap_deg(g_app_obs.imu.pitch - s_body_pitch_zero);
+    g_app_obs.body.roll = app_wrap_deg(g_app_obs.imu.roll - s_body_roll_zero);
+    g_app_obs.body.yaw = app_wrap_deg(g_app_obs.imu.yaw - s_body_yaw_zero);
+    for (uint8_t i = 0; i < 3U; i++) {
+        g_app_obs.body.gyro[i] = g_app_obs.imu.gyro[i];
+        g_app_obs.body.accel[i] = g_app_obs.imu.accel[i];
+    }
+    g_app_obs.body.online = g_app_obs.imu.online;
+    g_app_obs.body.zeroed = s_body_zeroed;
 
     app_obs_update_leg(APP_LEG_LEFT, LEG_SIDE_LEFT,
                        APP_FT_LEFT, APP_DM_LEFT_JOINT);
@@ -166,6 +202,18 @@ static void app_run_imu_read(void)
     g_app_cmd.imu_request_once = 0U;
 }
 
+static void app_run_imu_periodic(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if ((now - s_imu_request_ms) < 20U) {
+        return;
+    }
+
+    imu_request_data();
+    s_imu_request_ms = now;
+}
+
 void app_init(void)
 {
     dm_motor_init(&g_dm_motors[DM_MOTOR_LEFT_JOINT_IDX], &hcan2,
@@ -191,6 +239,7 @@ void app_init(void)
     g_app_status.control_ticks = 0;
     g_app_status.background_ticks = 0;
     g_app_status.initialized = 1;
+    s_imu_request_ms = HAL_GetTick();
 }
 
 void app_control_2khz(void)
@@ -223,8 +272,32 @@ void app_background(void)
             break;
     }
 
+    app_run_imu_periodic();
     app_obs_update();
     g_app_status.background_ticks++;
+}
+
+uint8_t app_imu_zero_current(void)
+{
+    if (g_app_obs.imu.online == 0U) {
+        return 0U;
+    }
+
+    s_body_pitch_zero = g_app_obs.imu.pitch;
+    s_body_roll_zero = g_app_obs.imu.roll;
+    s_body_yaw_zero = g_app_obs.imu.yaw;
+    s_body_zeroed = 1U;
+    app_obs_update();
+    return 1U;
+}
+
+void app_imu_zero_clear(void)
+{
+    s_body_pitch_zero = 0.0f;
+    s_body_roll_zero = 0.0f;
+    s_body_yaw_zero = 0.0f;
+    s_body_zeroed = 0U;
+    app_obs_update();
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)

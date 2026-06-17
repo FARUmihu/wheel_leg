@@ -2,6 +2,7 @@
 #include "bsp_can.h"
 
 dm_imu_t g_imu;
+volatile uint16_t g_imu_can_id = IMU_CAN_ID;
 
 /* ── 内部工具 ────────────────────────────────────────────────── */
 
@@ -19,7 +20,12 @@ static void imu_send_cmd(uint8_t reg_id, uint8_t ac, uint32_t data)
     buf[5] = (uint8_t)(data >> 8);
     buf[6] = (uint8_t)(data >> 16);
     buf[7] = (uint8_t)(data >> 24);
-    bsp_can_send(&hcan1, IMU_CAN_ID, buf, 8);
+
+    g_imu.last_tx_status = bsp_can_send(&hcan1, g_imu_can_id, buf, 8);
+    g_imu.tx_count++;
+    if (g_imu.last_tx_status != 0U) {
+        g_imu.tx_error_count++;
+    }
 }
 
 /* ── 数据解码（内部，由 RX 回调调用）────────────────────────── */
@@ -49,7 +55,15 @@ static void imu_decode_euler(const uint8_t *d)
 
 void bsp_can1_rx_callback(uint32_t id, uint8_t *data, uint8_t len)
 {
+    g_imu.can_rx_count++;
+    g_imu.last_can_id = id;
+    g_imu.last_len = len;
+    for (uint8_t i = 0U; (i < len) && (i < 8U); i++) {
+        g_imu.last_raw[i] = data[i];
+    }
+
     if (id != IMU_MST_ID) return;
+    if (len < 8U) return;
 
     switch (data[0]) {
         case 1: imu_decode_accel(data); break;
@@ -57,19 +71,48 @@ void bsp_can1_rx_callback(uint32_t id, uint8_t *data, uint8_t len)
         case 3: imu_decode_euler(data); break;
         default: break;
     }
+
+    if ((data[0] >= 1U) && (data[0] <= 3U)) {
+        g_imu.rx_count++;
+        g_imu.last_update_ms = HAL_GetTick();
+        g_imu.last_type = data[0];
+    }
 }
 
 /* ── 接口实现 ────────────────────────────────────────────────── */
 
 void imu_init(void)
 {
+    g_imu.rx_count = 0U;
+    g_imu.can_rx_count = 0U;
+    g_imu.tx_count = 0U;
+    g_imu.tx_error_count = 0U;
+    g_imu.last_update_ms = 0U;
+    g_imu.last_can_id = 0U;
+    g_imu.last_type = 0U;
+    g_imu.last_len = 0U;
+    g_imu.last_tx_status = 0U;
+    for (uint8_t i = 0U; i < 8U; i++) {
+        g_imu.last_raw[i] = 0U;
+    }
+
     /* 设置主动推送模式，IMU 自动按内部频率推送数据 */
     imu_send_cmd(11, 1, 1);   /* CHANGE_ACTIVE = 11, write, value = 1 */
 }
 
 void imu_request_data(void)
 {
+    imu_send_cmd(1, 0, 0);   /* ACCEL_DATA = 1, read */
     /* 主动请求一次欧拉角和陀螺仪数据（请求模式下使用）*/
     imu_send_cmd(3, 0, 0);   /* EULER_DATA = 3, read */
     imu_send_cmd(2, 0, 0);   /* GYRO_DATA  = 2, read */
+}
+
+uint8_t imu_is_online(uint32_t timeout_ms)
+{
+    if (g_imu.rx_count == 0U) {
+        return 0U;
+    }
+
+    return ((HAL_GetTick() - g_imu.last_update_ms) <= timeout_ms) ? 1U : 0U;
 }
