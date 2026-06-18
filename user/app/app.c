@@ -36,6 +36,29 @@ static float s_leg_assist_right_base_kp;
 static float s_leg_assist_right_base_kd;
 static uint8_t s_tune_stage;
 static uint32_t s_tune_stage_ms;
+volatile float g_balance_dbg_pitch_raw;
+volatile float g_balance_dbg_pitch_pred;
+volatile float g_balance_dbg_pitch_rate;
+volatile float g_balance_dbg_pitch_age_s;
+volatile float g_balance_dbg_wheel_vel;
+volatile float g_balance_dbg_torque;
+volatile uint32_t g_balance_dbg_ticks;
+
+typedef struct {
+    uint32_t tick;
+    float pitch_raw;
+    float pitch_pred;
+    float pitch_rate;
+    float wheel_vel;
+    float torque;
+} app_balance_dbg_sample_t;
+
+#define APP_BALANCE_DBG_LOG_COUNT 256U
+#define APP_BALANCE_DBG_LOG_DIVIDER 2U
+
+volatile app_balance_dbg_sample_t g_balance_dbg_log[APP_BALANCE_DBG_LOG_COUNT];
+volatile uint16_t g_balance_dbg_log_idx;
+static uint8_t s_balance_dbg_log_divider;
 
 #define APP_INITIAL_LEFT_X_MM      (-36.0f)
 #define APP_INITIAL_LEFT_Y_MM      (-80.0f)
@@ -43,9 +66,9 @@ static uint32_t s_tune_stage_ms;
 #define APP_INITIAL_RIGHT_Y_MM     (-80.0f)
 #define APP_INITIAL_FT_SPEED       200U
 #define APP_INITIAL_FT_ACC           0U
-#define APP_INITIAL_LEFT_DM_KP    50.0f
-#define APP_INITIAL_LEFT_DM_KD     0.50f
-#define APP_INITIAL_LEFT_DM_T     (-2.5f)
+#define APP_INITIAL_LEFT_DM_KP    60.0f
+#define APP_INITIAL_LEFT_DM_KD     0.60f
+#define APP_INITIAL_LEFT_DM_T     -4.0f
 #define APP_INITIAL_RIGHT_DM_KP   60.0f
 #define APP_INITIAL_RIGHT_DM_KD    0.60f
 #define APP_INITIAL_RIGHT_DM_T     4.0f
@@ -63,11 +86,19 @@ static uint32_t s_tune_stage_ms;
 #define APP_LEG_ASSIST_RIGHT_DM_KD  0.90f
 #define APP_CONTROL_DT_S           0.0005f
 #define APP_BALANCE_DT_S           (APP_CONTROL_DT_S * (float)APP_WHEEL_SEND_DIVIDER)
-#define APP_BALANCE_INTEGRAL_LIMIT 20.0f
+#define APP_BALANCE_INTEGRAL_LIMIT  1.5f
+#define APP_BALANCE_WHEEL_POS_KP    0.0f
+#define APP_BALANCE_WHEEL_VEL_KD  (-0.010f)
+#define APP_BALANCE_WHEEL_POS_LIMIT  18.0f
+#define APP_BALANCE_WHEEL_POS_LEAK    0.15f
+#define APP_BALANCE_PITCH_PREDICT_MAX_S  0.035f
 #define APP_BALANCE_DEADBAND_DEG    0.0f
-#define APP_BALANCE_MIN_TORQUE      0.0f
-#define APP_BALANCE_TORQUE_SLEW     3.0f
-#define APP_BALANCE_WHEEL_VEL_KD    0.016f
+#define APP_BALANCE_MIN_TORQUE      0.04f
+#define APP_BALANCE_TORQUE_SLEW   300.0f
+#define APP_BALANCE_WHEEL_MIT_KD    0.03f
+#define APP_BALANCE_TILT_STOP_DEG  30.0f
+#define APP_BALANCE_TORQUE_SIGN     1.0f
+#define APP_BALANCE_WHEEL_STATE_SIGN 1.0f
 #define APP_WHEEL_ZERO_TICKS      400U
 #define APP_DM_BIT(idx)            ((uint8_t)(1U << (idx)))
 #define APP_DM_JOINT_MASK          ((uint8_t)(APP_DM_BIT(APP_DM_LEFT_JOINT) | APP_DM_BIT(APP_DM_RIGHT_JOINT)))
@@ -78,10 +109,10 @@ static uint32_t s_tune_stage_ms;
 #define APP_TUNE_POSE_DELAY_MS   1500U
 #define APP_TUNE_START_DELAY_MS  4500U
 #define APP_TUNE_RUN_MS             0U
-#define APP_TUNE_WHEEL_KP          0.020f
-#define APP_TUNE_WHEEL_KI          0.005f
-#define APP_TUNE_WHEEL_KD          0.015f
-#define APP_TUNE_WHEEL_MAX         0.3f
+#define APP_TUNE_WHEEL_KP          0.350f
+#define APP_TUNE_WHEEL_KI          0.001f
+#define APP_TUNE_WHEEL_KD          0.580f
+#define APP_TUNE_WHEEL_MAX         3.6f
 #define APP_TUNE_LEG_KP           (-0.008f)
 #define APP_TUNE_LEG_KD           (-0.0015f)
 #define APP_TUNE_LEG_BIAS         (-0.035f)
@@ -168,6 +199,11 @@ static float app_wrap_deg(float angle)
     return angle;
 }
 
+static float app_absf(float x)
+{
+    return (x < 0.0f) ? -x : x;
+}
+
 static float app_clampf(float x, float min_value, float max_value)
 {
     if (x < min_value) {
@@ -177,6 +213,18 @@ static float app_clampf(float x, float min_value, float max_value)
         return max_value;
     }
     return x;
+}
+
+static float app_predict_pitch_deg(float pitch_deg, float pitch_rate_rad_s)
+{
+    if (g_imu.last_euler_update_ms == 0U) {
+        return pitch_deg;
+    }
+
+    float age_s = (float)(HAL_GetTick() - g_imu.last_euler_update_ms) * 0.001f;
+    age_s = app_clampf(age_s, 0.0f, APP_BALANCE_PITCH_PREDICT_MAX_S);
+    g_balance_dbg_pitch_age_s = age_s;
+    return app_wrap_deg(pitch_deg + pitch_rate_rad_s * 57.29578f * age_s);
 }
 
 static void app_set_dm_cmd(app_dm_index_t idx,
@@ -422,12 +470,14 @@ static void app_run_joint_hold(void)
 
 static void app_balance_send_wheels(float forward_torque)
 {
-    float t = app_clampf(forward_torque,
+    float t = app_clampf(forward_torque * APP_BALANCE_TORQUE_SIGN,
                          DM3510_T_MIN,
                          DM3510_T_MAX);
 
-    app_set_dm_cmd(APP_DM_LEFT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, t);
-    app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, -t);
+    app_set_dm_cmd(APP_DM_LEFT_WHEEL, 0.0f, 0.0f, 0.0f,
+                   APP_BALANCE_WHEEL_MIT_KD, t);
+    app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f,
+                   APP_BALANCE_WHEEL_MIT_KD, -t);
 
     app_send_dm_mask(APP_DM_WHEEL_MASK);
 }
@@ -462,6 +512,7 @@ static void app_run_balance(void)
     s_wheel_send_divider = 0U;
 
     if ((imu_is_online(100U) == 0U) || (s_body_zeroed == 0U)) {
+        balance_controller_reset(&s_balance_ctrl);
         app_balance_send_wheels(0.0f);
         return;
     }
@@ -476,22 +527,52 @@ static void app_run_balance(void)
 
     float pitch = app_wrap_deg(g_imu.pitch - s_body_pitch_zero);
     float pitch_rate = g_imu.gyro[1];
+    float pitch_pred = app_predict_pitch_deg(pitch, pitch_rate);
 
-    if (g_app_cmd.mode == APP_MODE_BALANCE_LEG_ASSIST) {
-        app_run_leg_assist(pitch, pitch_rate);
+    if (app_absf(pitch_pred) > APP_BALANCE_TILT_STOP_DEG) {
+        app_balance_stop();
+        return;
     }
 
-    float torque = balance_controller_update(&s_balance_ctrl,
-                                             0.0f,
-                                             pitch,
-                                             pitch_rate,
-                                             APP_BALANCE_DT_S);
+    if (g_app_cmd.mode == APP_MODE_BALANCE_LEG_ASSIST) {
+        app_run_leg_assist(pitch_pred, pitch_rate);
+    }
+
     float wheel_forward_vel =
+        APP_BALANCE_WHEEL_STATE_SIGN *
         0.5f * (g_dm_motors[APP_DM_LEFT_WHEEL].vel_filtered -
                 g_dm_motors[APP_DM_RIGHT_WHEEL].vel_filtered);
-    torque -= APP_BALANCE_WHEEL_VEL_KD * wheel_forward_vel;
+    float torque = balance_controller_update(&s_balance_ctrl,
+                                             0.0f,
+                                             pitch_pred,
+                                             pitch_rate,
+                                             wheel_forward_vel,
+                                             APP_BALANCE_DT_S);
     torque = app_clampf(torque, -s_balance_ctrl.output_limit,
                         s_balance_ctrl.output_limit);
+    g_balance_dbg_pitch_raw = pitch;
+    g_balance_dbg_pitch_pred = pitch_pred;
+    g_balance_dbg_pitch_rate = pitch_rate;
+    g_balance_dbg_wheel_vel = wheel_forward_vel;
+    g_balance_dbg_torque = torque;
+    g_balance_dbg_ticks++;
+    s_balance_dbg_log_divider++;
+    if (s_balance_dbg_log_divider >= APP_BALANCE_DBG_LOG_DIVIDER) {
+        uint16_t idx = g_balance_dbg_log_idx;
+
+        s_balance_dbg_log_divider = 0U;
+        g_balance_dbg_log[idx].tick = g_app_status.control_ticks;
+        g_balance_dbg_log[idx].pitch_raw = pitch;
+        g_balance_dbg_log[idx].pitch_pred = pitch_pred;
+        g_balance_dbg_log[idx].pitch_rate = pitch_rate;
+        g_balance_dbg_log[idx].wheel_vel = wheel_forward_vel;
+        g_balance_dbg_log[idx].torque = torque;
+        idx++;
+        if (idx >= APP_BALANCE_DBG_LOG_COUNT) {
+            idx = 0U;
+        }
+        g_balance_dbg_log_idx = idx;
+    }
     app_balance_send_wheels(torque);
 }
 
@@ -747,6 +828,11 @@ uint8_t app_balance_start(float pitch_kp, float pitch_ki,
                                     APP_BALANCE_DEADBAND_DEG,
                                     APP_BALANCE_MIN_TORQUE,
                                     APP_BALANCE_TORQUE_SLEW);
+    balance_controller_set_wheel_response(&s_balance_ctrl,
+                                          APP_BALANCE_WHEEL_POS_KP,
+                                          APP_BALANCE_WHEEL_VEL_KD,
+                                          APP_BALANCE_WHEEL_POS_LIMIT,
+                                          APP_BALANCE_WHEEL_POS_LEAK);
     s_wheel_send_divider = 0U;
     s_wheel_enable_frames = APP_WHEEL_ENABLE_FRAMES;
     s_wheel_zero_ticks = 0U;

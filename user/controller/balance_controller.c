@@ -61,12 +61,17 @@ void balance_controller_init(balance_controller_t *ctl)
     ctl->kp = 0.0f;
     ctl->ki = 0.0f;
     ctl->kd = 0.0f;
+    ctl->wheel_pos_kp = 0.0f;
+    ctl->wheel_vel_kd = 0.0f;
     ctl->output_limit = 0.0f;
     ctl->integral_limit = 0.0f;
+    ctl->wheel_pos_limit = 0.0f;
+    ctl->wheel_pos_leak_rate = 0.0f;
     ctl->deadband_deg = 0.0f;
     ctl->min_output = 0.0f;
     ctl->output_slew_rate = 0.0f;
     ctl->integral = 0.0f;
+    ctl->wheel_position = 0.0f;
     ctl->output = 0.0f;
 }
 
@@ -101,6 +106,22 @@ void balance_controller_set_response(balance_controller_t *ctl,
     ctl->output_slew_rate = balance_absf(output_slew_rate);
 }
 
+void balance_controller_set_wheel_response(balance_controller_t *ctl,
+                                           float wheel_pos_kp,
+                                           float wheel_vel_kd,
+                                           float wheel_pos_limit,
+                                           float wheel_pos_leak_rate)
+{
+    if (ctl == 0) {
+        return;
+    }
+
+    ctl->wheel_pos_kp = wheel_pos_kp;
+    ctl->wheel_vel_kd = wheel_vel_kd;
+    ctl->wheel_pos_limit = balance_absf(wheel_pos_limit);
+    ctl->wheel_pos_leak_rate = balance_absf(wheel_pos_leak_rate);
+}
+
 void balance_controller_reset(balance_controller_t *ctl)
 {
     if (ctl == 0) {
@@ -108,6 +129,7 @@ void balance_controller_reset(balance_controller_t *ctl)
     }
 
     ctl->integral = 0.0f;
+    ctl->wheel_position = 0.0f;
     ctl->output = 0.0f;
 }
 
@@ -115,6 +137,7 @@ float balance_controller_update(balance_controller_t *ctl,
                                 float target_pitch_deg,
                                 float pitch_deg,
                                 float pitch_rate_rad_s,
+                                float wheel_velocity_rad_s,
                                 float dt_s)
 {
     if ((ctl == 0) || (dt_s <= 0.0f)) {
@@ -127,9 +150,26 @@ float balance_controller_update(balance_controller_t *ctl,
 
     ctl->integral += tilt_error * dt_s;
     ctl->integral = balance_clampf(ctl->integral, ctl->integral_limit);
+    ctl->wheel_position += wheel_velocity_rad_s * dt_s;
+    if (ctl->wheel_pos_leak_rate > 0.0f) {
+        float leak = ctl->wheel_pos_leak_rate * dt_s;
+
+        if (ctl->wheel_position > leak) {
+            ctl->wheel_position -= leak;
+        } else if (ctl->wheel_position < -leak) {
+            ctl->wheel_position += leak;
+        } else {
+            ctl->wheel_position = 0.0f;
+        }
+    }
+    ctl->wheel_position = balance_clampf(ctl->wheel_position,
+                                         ctl->wheel_pos_limit);
+
     float target_output = ctl->kp * proportional_error +
                           ctl->ki * ctl->integral +
-                          ctl->kd * pitch_rate_rad_s;
+                          ctl->kd * pitch_rate_rad_s +
+                          ctl->wheel_pos_kp * ctl->wheel_position +
+                          ctl->wheel_vel_kd * wheel_velocity_rad_s;
     target_output = balance_clampf(target_output, ctl->output_limit);
     if ((tilt_error != 0.0f) && (target_output != 0.0f)) {
         float min_output = ctl->min_output;

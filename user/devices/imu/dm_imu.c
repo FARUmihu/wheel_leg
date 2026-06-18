@@ -49,6 +49,8 @@ static void imu_decode_euler(const uint8_t *d)
     g_imu.pitch = uint_to_float((uint16_t)(d[3] << 8 | d[2]), IMU_PITCH_MIN, IMU_PITCH_MAX);
     g_imu.yaw   = uint_to_float((uint16_t)(d[5] << 8 | d[4]), IMU_YAW_MIN,   IMU_YAW_MAX);
     g_imu.roll  = uint_to_float((uint16_t)(d[7] << 8 | d[6]), IMU_ROLL_MIN,  IMU_ROLL_MAX);
+    g_imu.last_euler_update_ms = HAL_GetTick();
+    g_imu.euler_rx_count++;
 }
 
 /* ── CAN1 RX 回调（覆盖 bsp_can 弱函数）────────────────────── */
@@ -88,6 +90,8 @@ void imu_init(void)
     g_imu.tx_count = 0U;
     g_imu.tx_error_count = 0U;
     g_imu.last_update_ms = 0U;
+    g_imu.last_euler_update_ms = 0U;
+    g_imu.euler_rx_count = 0U;
     g_imu.last_can_id = 0U;
     g_imu.last_type = 0U;
     g_imu.last_len = 0U;

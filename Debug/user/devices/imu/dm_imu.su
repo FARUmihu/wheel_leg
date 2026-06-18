@@ -3,7 +3,7 @@
 ../user/devices/imu/dm_imu.c:33:13:imu_decode_accel	16	static
 ../user/devices/imu/dm_imu.c:40:13:imu_decode_gyro	16	static
 ../user/devices/imu/dm_imu.c:47:13:imu_decode_euler	16	static
-../user/devices/imu/dm_imu.c:56:6:bsp_can1_rx_callback	32	static
-../user/devices/imu/dm_imu.c:84:6:imu_init	16	static
-../user/devices/imu/dm_imu.c:103:6:imu_request_data	8	static
-../user/devices/imu/dm_imu.c:111:9:imu_is_online	16	static
+../user/devices/imu/dm_imu.c:58:6:bsp_can1_rx_callback	32	static
+../user/devices/imu/dm_imu.c:86:6:imu_init	16	static
+../user/devices/imu/dm_imu.c:107:6:imu_request_data	8	static
+../user/devices/imu/dm_imu.c:115:9:imu_is_online	16	static

@@ -35,6 +35,8 @@ typedef struct {
     uint32_t tx_count;
     uint32_t tx_error_count;
     uint32_t last_update_ms;
+    uint32_t last_euler_update_ms;
+    uint32_t euler_rx_count;
     uint32_t last_can_id;
     uint8_t last_type;
     uint8_t last_len;
