@@ -1,0 +1,10 @@
+../user/devices/remote/remote_esp32.c:32:17:remote_crc16_modbus_update	3
+../user/devices/remote/remote_esp32.c:46:17:remote_frame_crc	2
+../user/devices/remote/remote_esp32.c:60:16:remote_read_i16_le	1
+../user/devices/remote/remote_esp32.c:66:13:remote_accept_frame	3
+../user/devices/remote/remote_esp32.c:81:13:remote_reset_parser	1
+../user/devices/remote/remote_esp32.c:91:6:remote_esp32_init	2
+../user/devices/remote/remote_esp32.c:109:6:remote_esp32_background	2
+../user/devices/remote/remote_esp32.c:118:6:remote_esp32_rx_byte	15
+../user/devices/remote/remote_esp32.c:183:9:remote_esp32_is_online	3
+../user/devices/remote/remote_esp32.c:192:6:HAL_UART_RxCpltCallback	3

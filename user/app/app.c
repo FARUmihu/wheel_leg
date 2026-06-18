@@ -1,5 +1,7 @@
 #include "app.h"
 
+#include "app_config.h"
+#include "app_remote.h"
 #include "bsp_can.h"
 #include "dm_imu.h"
 #include "dm_motor.h"
@@ -61,82 +63,13 @@ typedef struct {
     float torque;
 } app_balance_dbg_sample_t;
 
-#define APP_BALANCE_DBG_LOG_COUNT 256U
-#define APP_BALANCE_DBG_LOG_DIVIDER 2U
-
 volatile app_balance_dbg_sample_t g_balance_dbg_log[APP_BALANCE_DBG_LOG_COUNT];
 volatile uint16_t g_balance_dbg_log_idx;
 static uint8_t s_balance_dbg_log_divider;
 
-#define APP_INITIAL_LEFT_X_MM      (-36.0f)
-#define APP_INITIAL_LEFT_Y_MM      (-80.0f)
-#define APP_INITIAL_RIGHT_X_MM      36.0f
-#define APP_INITIAL_RIGHT_Y_MM     (-80.0f)
-#define APP_INITIAL_FT_SPEED       200U
-#define APP_INITIAL_FT_ACC           0U
-#define APP_INITIAL_LEFT_DM_KP    60.0f
-#define APP_INITIAL_LEFT_DM_KD     0.60f
-#define APP_INITIAL_LEFT_DM_T     -4.0f
-#define APP_INITIAL_RIGHT_DM_KP   60.0f
-#define APP_INITIAL_RIGHT_DM_KD    0.60f
-#define APP_INITIAL_RIGHT_DM_T     4.0f
-#define APP_JOINT_HOLD_DIVIDER     2U
-#define APP_WHEEL_SEND_DIVIDER     5U
-#define APP_WHEEL_ENABLE_FRAMES  100U
-#define APP_LEG_ASSIST_DIVIDER    40U
-#define APP_LEG_ASSIST_DT_S       (APP_CONTROL_DT_S * (float)APP_LEG_ASSIST_DIVIDER)
-#define APP_LEG_ASSIST_SLEW_RAD_S  0.10f
-#define APP_LEG_ASSIST_LEFT_SIGN    1.0f
-#define APP_LEG_ASSIST_RIGHT_SIGN  (-1.0f)
-#define APP_LEG_ASSIST_LEFT_DM_KP  80.0f
-#define APP_LEG_ASSIST_LEFT_DM_KD   0.80f
-#define APP_LEG_ASSIST_RIGHT_DM_KP  90.0f
-#define APP_LEG_ASSIST_RIGHT_DM_KD  0.90f
-#define APP_CONTROL_DT_S           0.0005f
-#define APP_BALANCE_DT_S           (APP_CONTROL_DT_S * (float)APP_WHEEL_SEND_DIVIDER)
-#define APP_BALANCE_INTEGRAL_LIMIT  1.5f
-#define APP_BALANCE_WHEEL_POS_KP    0.0f
-#define APP_BALANCE_WHEEL_VEL_KD  (-0.010f)
-#define APP_BALANCE_WHEEL_POS_LIMIT  18.0f
-#define APP_BALANCE_WHEEL_POS_LEAK    0.15f
-#define APP_BALANCE_PITCH_PREDICT_MAX_S  0.035f
-#define APP_BALANCE_DEADBAND_DEG    0.0f
-#define APP_BALANCE_MIN_TORQUE      0.04f
-#define APP_BALANCE_TORQUE_SLEW   300.0f
-#define APP_BALANCE_WHEEL_MIT_KD    0.03f
-#define APP_BALANCE_TILT_STOP_DEG  30.0f
-#define APP_BALANCE_TORQUE_SIGN     1.0f
-#define APP_BALANCE_WHEEL_STATE_SIGN 1.0f
-#define APP_WHEEL_ZERO_TICKS      400U
 #define APP_DM_BIT(idx)            ((uint8_t)(1U << (idx)))
 #define APP_DM_JOINT_MASK          ((uint8_t)(APP_DM_BIT(APP_DM_LEFT_JOINT) | APP_DM_BIT(APP_DM_RIGHT_JOINT)))
 #define APP_DM_WHEEL_MASK          ((uint8_t)(APP_DM_BIT(APP_DM_LEFT_WHEEL) | APP_DM_BIT(APP_DM_RIGHT_WHEEL)))
-
-#define APP_TUNE_AUTOSTART          1U
-#define APP_TUNE_USE_LEG_ASSIST     0U
-#define APP_TUNE_POSE_DELAY_MS   3000U
-#define APP_TUNE_START_DELAY_MS  8000U
-#define APP_TUNE_RUN_MS             0U
-#define APP_TUNE_WHEEL_KP          0.350f
-#define APP_TUNE_WHEEL_KI          0.001f
-#define APP_TUNE_WHEEL_KD          0.580f
-#define APP_TUNE_WHEEL_MAX         3.6f
-#define APP_TUNE_LEG_KP           (-0.008f)
-#define APP_TUNE_LEG_KD           (-0.0015f)
-#define APP_TUNE_LEG_BIAS         (-0.035f)
-#define APP_TUNE_LEG_MAX           0.10f
-#define APP_COLD_START_HOLD_MS   3000U
-#define APP_STARTUP_DISABLE_RETRY_MS 100U
-#define APP_IMU_ACTIVATE_RETRY_MS  200U
-#define APP_IMU_ACTIVE_STABLE_MS  1000U
-#define APP_DM_ACTIVE_TIMEOUT_MS   300U
-#define APP_AUTOSTART_MAX_GYRO_RAD_S 0.8f
-#define APP_AUTOSTART_MAX_PITCH_DEG 25.0f
-#define APP_AUTOSTART_MAX_ROLL_DEG  35.0f
-#define APP_JOINT_ENABLE_RETRY_MS   100U
-#define APP_JOINT_ENABLE_RETRY_WINDOW_MS 2000U
-#define APP_FT_POSE_REFRESH_MS      200U
-#define APP_FT_POSE_REFRESH_WINDOW_MS 4000U
 
 static void app_run_joint_hold(void);
 static void app_run_balance(void);
@@ -548,6 +481,7 @@ void app_init(void)
     bsp_can_init();
     feetech_servo_init();
     imu_init();
+    app_remote_init();
 
     app_cmd_set_defaults();
     app_obs_update();
@@ -798,6 +732,7 @@ void app_background(void)
 
     app_run_imu_periodic();
     app_run_initial_pose_retries();
+    app_remote_background();
     app_obs_update();
     app_tune_autostart_task();
     g_app_status.background_ticks++;

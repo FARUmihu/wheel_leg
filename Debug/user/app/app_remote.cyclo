@@ -1,0 +1,5 @@
+../user/app/app_remote.c:8:16:app_remote_clamp_i16	3
+../user/app/app_remote.c:19:6:app_remote_init	1
+../user/app/app_remote.c:27:6:app_remote_background	2
+../user/app/app_remote.c:50:9:app_remote_get_vx_mm_s	1
+../user/app/app_remote.c:55:9:app_remote_get_wz_mrad_s	1

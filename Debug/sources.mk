@@ -34,4 +34,5 @@ user/controller \
 user/devices/dm_motor \
 user/devices/feetech \
 user/devices/imu \
+user/devices/remote \
 

@@ -1,6 +1,6 @@
-user/app/app.o: ../user/app/app.c ../user/app/app.h \
- ../user/app/app_config.h ../user/app/app_remote.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h \
+user/app/app_remote.o: ../user/app/app_remote.c ../user/app/app_remote.h \
+ ../user/app/app_config.h \
+ C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/remote/remote_esp32.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
  ../Core/Inc/stm32f4xx_hal_conf.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h \
@@ -29,17 +29,10 @@ user/app/app.o: ../user/app/app.c ../user/app/app.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/imu/dm_imu.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h \
- C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/feetech/feetech_servo.h \
- ../user/app/../algorithm/leg_kinematics/leg_kinematics.h \
- ../user/app/../controller/balance_controller.h \
- ../user/app/../controller/leg_balance_controller.h
-../user/app/app.h:
-../user/app/app_config.h:
+ ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
 ../user/app/app_remote.h:
-C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h:
+../user/app/app_config.h:
+C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/remote/remote_esp32.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h:
@@ -69,9 +62,3 @@ C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
-C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/imu/dm_imu.h:
-C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h:
-C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/feetech/feetech_servo.h:
-../user/app/../algorithm/leg_kinematics/leg_kinematics.h:
-../user/app/../controller/balance_controller.h:
-../user/app/../controller/leg_balance_controller.h:
