@@ -5,6 +5,7 @@
 #define REMOTE_CMD_CONTROL  0x01U
 #define REMOTE_CONTROL_LEN  0x04U
 #define REMOTE_MAX_PAYLOAD  16U
+#define REMOTE_RX_DMA_BUF_SIZE 64U
 
 typedef enum {
     REMOTE_RX_HEAD_0 = 0,
@@ -20,7 +21,7 @@ typedef enum {
 volatile remote_esp32_state_t g_remote_esp32;
 
 static UART_HandleTypeDef *s_remote_huart;
-static uint8_t s_remote_rx_byte;
+static uint8_t s_remote_rx_dma_buf[REMOTE_RX_DMA_BUF_SIZE];
 static remote_rx_state_t s_rx_state;
 static uint8_t s_rx_cmd;
 static uint8_t s_rx_seq;
@@ -88,6 +89,19 @@ static void remote_reset_parser(void)
     s_rx_crc_lo = 0U;
 }
 
+static void remote_start_dma_rx(void)
+{
+    if ((s_remote_huart == 0) || (s_remote_huart->hdmarx == 0)) {
+        return;
+    }
+
+    if (HAL_UARTEx_ReceiveToIdle_DMA(s_remote_huart,
+                                     s_remote_rx_dma_buf,
+                                     REMOTE_RX_DMA_BUF_SIZE) == HAL_OK) {
+        __HAL_DMA_DISABLE_IT(s_remote_huart->hdmarx, DMA_IT_HT);
+    }
+}
+
 void remote_esp32_init(UART_HandleTypeDef *huart)
 {
     s_remote_huart = huart;
@@ -101,9 +115,7 @@ void remote_esp32_init(UART_HandleTypeDef *huart)
     g_remote_esp32.drop_count = 0U;
     remote_reset_parser();
 
-    if (s_remote_huart != 0) {
-        (void)HAL_UART_Receive_IT(s_remote_huart, &s_remote_rx_byte, 1U);
-    }
+    remote_start_dma_rx();
 }
 
 void remote_esp32_background(void)
@@ -180,6 +192,13 @@ void remote_esp32_rx_byte(uint8_t byte)
     }
 }
 
+static void remote_esp32_rx_bytes(const uint8_t *data, uint16_t len)
+{
+    for (uint16_t i = 0U; i < len; i++) {
+        remote_esp32_rx_byte(data[i]);
+    }
+}
+
 uint8_t remote_esp32_is_online(uint32_t timeout_ms)
 {
     if (g_remote_esp32.last_update_ms == 0U) {
@@ -189,10 +208,22 @@ uint8_t remote_esp32_is_online(uint32_t timeout_ms)
     return ((HAL_GetTick() - g_remote_esp32.last_update_ms) <= timeout_ms) ? 1U : 0U;
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if ((s_remote_huart != 0) && (huart->Instance == s_remote_huart->Instance)) {
-        remote_esp32_rx_byte(s_remote_rx_byte);
-        (void)HAL_UART_Receive_IT(s_remote_huart, &s_remote_rx_byte, 1U);
+        if (Size > REMOTE_RX_DMA_BUF_SIZE) {
+            Size = REMOTE_RX_DMA_BUF_SIZE;
+        }
+        remote_esp32_rx_bytes(s_remote_rx_dma_buf, Size);
+        remote_start_dma_rx();
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if ((s_remote_huart != 0) && (huart->Instance == s_remote_huart->Instance)) {
+        g_remote_esp32.drop_count++;
+        remote_reset_parser();
+        remote_start_dma_rx();
     }
 }
