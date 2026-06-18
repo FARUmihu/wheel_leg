@@ -5,6 +5,8 @@
 #include "dm_motor.h"
 #include "feetech_servo.h"
 #include "../algorithm/leg_kinematics/leg_kinematics.h"
+#include "../controller/balance_controller.h"
+#include "../controller/leg_balance_controller.h"
 #include "stm32f4xx_hal.h"
 
 dm_motor_t g_dm_motors[4];
@@ -13,15 +15,112 @@ volatile app_cmd_t g_app_cmd;
 volatile app_obs_t g_app_obs;
 
 static uint32_t s_imu_request_ms;
+static uint8_t s_joint_hold_divider;
 static float s_body_pitch_zero;
 static float s_body_roll_zero;
 static float s_body_yaw_zero;
 static uint8_t s_body_zeroed;
+static balance_controller_t s_balance_ctrl;
+static leg_balance_controller_t s_leg_balance_ctrl;
+static uint8_t s_wheel_send_divider;
+static uint8_t s_wheel_enable_frames;
+static uint8_t s_wheel_zero_divider;
+static uint16_t s_wheel_zero_ticks;
+static uint8_t s_leg_assist_divider;
+static uint8_t s_leg_assist_active;
+static float s_leg_assist_left_base_rad;
+static float s_leg_assist_right_base_rad;
+static float s_leg_assist_left_base_kp;
+static float s_leg_assist_left_base_kd;
+static float s_leg_assist_right_base_kp;
+static float s_leg_assist_right_base_kd;
+static uint8_t s_tune_stage;
+static uint32_t s_tune_stage_ms;
+
+#define APP_INITIAL_LEFT_X_MM      (-36.0f)
+#define APP_INITIAL_LEFT_Y_MM      (-80.0f)
+#define APP_INITIAL_RIGHT_X_MM      36.0f
+#define APP_INITIAL_RIGHT_Y_MM     (-80.0f)
+#define APP_INITIAL_FT_SPEED       200U
+#define APP_INITIAL_FT_ACC           0U
+#define APP_INITIAL_LEFT_DM_KP    50.0f
+#define APP_INITIAL_LEFT_DM_KD     0.50f
+#define APP_INITIAL_LEFT_DM_T     (-2.5f)
+#define APP_INITIAL_RIGHT_DM_KP   60.0f
+#define APP_INITIAL_RIGHT_DM_KD    0.60f
+#define APP_INITIAL_RIGHT_DM_T     4.0f
+#define APP_JOINT_HOLD_DIVIDER     2U
+#define APP_WHEEL_SEND_DIVIDER     5U
+#define APP_WHEEL_ENABLE_FRAMES   20U
+#define APP_LEG_ASSIST_DIVIDER    40U
+#define APP_LEG_ASSIST_DT_S       (APP_CONTROL_DT_S * (float)APP_LEG_ASSIST_DIVIDER)
+#define APP_LEG_ASSIST_SLEW_RAD_S  0.10f
+#define APP_LEG_ASSIST_LEFT_SIGN    1.0f
+#define APP_LEG_ASSIST_RIGHT_SIGN  (-1.0f)
+#define APP_LEG_ASSIST_LEFT_DM_KP  80.0f
+#define APP_LEG_ASSIST_LEFT_DM_KD   0.80f
+#define APP_LEG_ASSIST_RIGHT_DM_KP  90.0f
+#define APP_LEG_ASSIST_RIGHT_DM_KD  0.90f
+#define APP_CONTROL_DT_S           0.0005f
+#define APP_BALANCE_DT_S           (APP_CONTROL_DT_S * (float)APP_WHEEL_SEND_DIVIDER)
+#define APP_BALANCE_INTEGRAL_LIMIT 20.0f
+#define APP_BALANCE_DEADBAND_DEG    0.0f
+#define APP_BALANCE_MIN_TORQUE      0.0f
+#define APP_BALANCE_TORQUE_SLEW     3.0f
+#define APP_BALANCE_WHEEL_VEL_KD    0.016f
+#define APP_WHEEL_ZERO_TICKS      400U
+#define APP_DM_BIT(idx)            ((uint8_t)(1U << (idx)))
+#define APP_DM_JOINT_MASK          ((uint8_t)(APP_DM_BIT(APP_DM_LEFT_JOINT) | APP_DM_BIT(APP_DM_RIGHT_JOINT)))
+#define APP_DM_WHEEL_MASK          ((uint8_t)(APP_DM_BIT(APP_DM_LEFT_WHEEL) | APP_DM_BIT(APP_DM_RIGHT_WHEEL)))
+
+#define APP_TUNE_AUTOSTART          1U
+#define APP_TUNE_USE_LEG_ASSIST     0U
+#define APP_TUNE_POSE_DELAY_MS   1500U
+#define APP_TUNE_START_DELAY_MS  4500U
+#define APP_TUNE_RUN_MS             0U
+#define APP_TUNE_WHEEL_KP          0.020f
+#define APP_TUNE_WHEEL_KI          0.005f
+#define APP_TUNE_WHEEL_KD          0.015f
+#define APP_TUNE_WHEEL_MAX         0.3f
+#define APP_TUNE_LEG_KP           (-0.008f)
+#define APP_TUNE_LEG_KD           (-0.0015f)
+#define APP_TUNE_LEG_BIAS         (-0.035f)
+#define APP_TUNE_LEG_MAX           0.10f
+
+static void app_run_joint_hold(void);
+static void app_run_balance(void);
+static void app_run_wheel_zero_stop(void);
+static void app_run_leg_assist(float pitch, float pitch_rate);
+static void app_leg_assist_restore(void);
+static void app_tune_autostart_task(void);
+
+typedef uint8_t (*app_debug_u8_void_fn_t)(void);
+typedef uint8_t (*app_debug_balance_start_fn_t)(float, float, float, float);
+typedef uint8_t (*app_debug_leg_balance_start_fn_t)(float, float, float, float,
+                                                    float, float, float, float);
+typedef void (*app_debug_void_fn_t)(void);
+
+static volatile app_debug_u8_void_fn_t s_debug_initial_pose_solve;
+static volatile app_debug_u8_void_fn_t s_debug_initial_pose_apply;
+static volatile app_debug_balance_start_fn_t s_debug_balance_start;
+static volatile app_debug_leg_balance_start_fn_t s_debug_balance_leg_assist_start;
+static volatile app_debug_void_fn_t s_debug_balance_stop;
+static volatile app_debug_void_fn_t s_debug_leg_hold_stop;
 
 _Static_assert(APP_DM_LEFT_JOINT == DM_MOTOR_LEFT_JOINT_IDX, "DM index mismatch");
 _Static_assert(APP_DM_RIGHT_JOINT == DM_MOTOR_RIGHT_JOINT_IDX, "DM index mismatch");
 _Static_assert(APP_DM_LEFT_WHEEL == DM_MOTOR_LEFT_WHEEL_IDX, "DM index mismatch");
 _Static_assert(APP_DM_RIGHT_WHEEL == DM_MOTOR_RIGHT_WHEEL_IDX, "DM index mismatch");
+
+static void app_keep_debug_symbols(void)
+{
+    s_debug_initial_pose_solve = app_initial_pose_solve;
+    s_debug_initial_pose_apply = app_initial_pose_apply;
+    s_debug_balance_start = app_balance_start;
+    s_debug_balance_leg_assist_start = app_balance_leg_assist_start;
+    s_debug_balance_stop = app_balance_stop;
+    s_debug_leg_hold_stop = app_leg_hold_stop;
+}
 
 static void app_cmd_set_defaults(void)
 {
@@ -67,6 +166,27 @@ static float app_wrap_deg(float angle)
         angle += 360.0f;
     }
     return angle;
+}
+
+static float app_clampf(float x, float min_value, float max_value)
+{
+    if (x < min_value) {
+        return min_value;
+    }
+    if (x > max_value) {
+        return max_value;
+    }
+    return x;
+}
+
+static void app_set_dm_cmd(app_dm_index_t idx,
+                           float p, float v, float kp, float kd, float t)
+{
+    g_app_cmd.dm[idx].p = p;
+    g_app_cmd.dm[idx].v = v;
+    g_app_cmd.dm[idx].kp = kp;
+    g_app_cmd.dm[idx].kd = kd;
+    g_app_cmd.dm[idx].t = t;
 }
 
 static void app_obs_update_leg(app_leg_index_t leg_idx,
@@ -147,10 +267,8 @@ static void app_obs_update(void)
                        APP_FT_RIGHT, APP_DM_RIGHT_JOINT);
 }
 
-static void app_run_dm_manual(void)
+static void app_send_dm_mask(uint8_t send_mask)
 {
-    uint8_t send_mask = g_app_cmd.dm_send_mask;
-
     for (uint8_t i = 0; i < APP_DM_COUNT; i++) {
         uint8_t bit = (uint8_t)(1U << i);
 
@@ -166,6 +284,11 @@ static void app_run_dm_manual(void)
 
         dm_motor_send_mit(&g_dm_motors[i], p, v, kp, kd, t);
     }
+}
+
+static void app_run_dm_manual(void)
+{
+    app_send_dm_mask(g_app_cmd.dm_send_mask);
 }
 
 static void app_run_ft_manual(void)
@@ -240,6 +363,24 @@ void app_init(void)
     g_app_status.background_ticks = 0;
     g_app_status.initialized = 1;
     s_imu_request_ms = HAL_GetTick();
+    s_joint_hold_divider = 0U;
+    s_wheel_send_divider = 0U;
+    s_wheel_enable_frames = 0U;
+    s_wheel_zero_divider = 0U;
+    s_wheel_zero_ticks = 0U;
+    s_leg_assist_divider = 0U;
+    s_leg_assist_active = 0U;
+    s_leg_assist_left_base_rad = 0.0f;
+    s_leg_assist_right_base_rad = 0.0f;
+    s_leg_assist_left_base_kp = 0.0f;
+    s_leg_assist_left_base_kd = 0.0f;
+    s_leg_assist_right_base_kp = 0.0f;
+    s_leg_assist_right_base_kd = 0.0f;
+    s_tune_stage = 0U;
+    s_tune_stage_ms = HAL_GetTick();
+    balance_controller_init(&s_balance_ctrl);
+    leg_balance_controller_init(&s_leg_balance_ctrl);
+    app_keep_debug_symbols();
 }
 
 void app_control_2khz(void)
@@ -248,11 +389,151 @@ void app_control_2khz(void)
         return;
     }
 
+    app_run_wheel_zero_stop();
+
     if (g_app_cmd.mode == APP_MODE_DM_MANUAL) {
         app_run_dm_manual();
+    } else if (g_app_cmd.mode == APP_MODE_LEG_HOLD) {
+        app_run_joint_hold();
+    } else if ((g_app_cmd.mode == APP_MODE_BALANCE_TEST) ||
+               (g_app_cmd.mode == APP_MODE_BALANCE_LEG_ASSIST)) {
+        app_run_balance();
     }
 
     g_app_status.control_ticks++;
+}
+
+static void app_run_joint_hold(void)
+{
+    uint8_t joint_mask = (uint8_t)(g_app_cmd.dm_send_mask & APP_DM_JOINT_MASK);
+
+    if (joint_mask == 0U) {
+        return;
+    }
+
+    s_joint_hold_divider++;
+    if (s_joint_hold_divider < APP_JOINT_HOLD_DIVIDER) {
+        return;
+    }
+    s_joint_hold_divider = 0U;
+
+    app_send_dm_mask(joint_mask);
+}
+
+static void app_balance_send_wheels(float forward_torque)
+{
+    float t = app_clampf(forward_torque,
+                         DM3510_T_MIN,
+                         DM3510_T_MAX);
+
+    app_set_dm_cmd(APP_DM_LEFT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, t);
+    app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, -t);
+
+    app_send_dm_mask(APP_DM_WHEEL_MASK);
+}
+
+static void app_run_wheel_zero_stop(void)
+{
+    if (s_wheel_zero_ticks == 0U) {
+        return;
+    }
+
+    s_wheel_zero_ticks--;
+    s_wheel_zero_divider++;
+    if (s_wheel_zero_divider >= APP_WHEEL_SEND_DIVIDER) {
+        s_wheel_zero_divider = 0U;
+        app_balance_send_wheels(0.0f);
+    }
+
+    if (s_wheel_zero_ticks == 0U) {
+        dm_motor_disable(&g_dm_motors[APP_DM_LEFT_WHEEL]);
+        dm_motor_disable(&g_dm_motors[APP_DM_RIGHT_WHEEL]);
+    }
+}
+
+static void app_run_balance(void)
+{
+    app_run_joint_hold();
+
+    s_wheel_send_divider++;
+    if (s_wheel_send_divider < APP_WHEEL_SEND_DIVIDER) {
+        return;
+    }
+    s_wheel_send_divider = 0U;
+
+    if ((imu_is_online(100U) == 0U) || (s_body_zeroed == 0U)) {
+        app_balance_send_wheels(0.0f);
+        return;
+    }
+
+    if (s_wheel_enable_frames > 0U) {
+        dm_motor_enable(&g_dm_motors[APP_DM_LEFT_WHEEL]);
+        dm_motor_enable(&g_dm_motors[APP_DM_RIGHT_WHEEL]);
+        app_balance_send_wheels(0.0f);
+        s_wheel_enable_frames--;
+        return;
+    }
+
+    float pitch = app_wrap_deg(g_imu.pitch - s_body_pitch_zero);
+    float pitch_rate = g_imu.gyro[1];
+
+    if (g_app_cmd.mode == APP_MODE_BALANCE_LEG_ASSIST) {
+        app_run_leg_assist(pitch, pitch_rate);
+    }
+
+    float torque = balance_controller_update(&s_balance_ctrl,
+                                             0.0f,
+                                             pitch,
+                                             pitch_rate,
+                                             APP_BALANCE_DT_S);
+    float wheel_forward_vel =
+        0.5f * (g_dm_motors[APP_DM_LEFT_WHEEL].vel_filtered -
+                g_dm_motors[APP_DM_RIGHT_WHEEL].vel_filtered);
+    torque -= APP_BALANCE_WHEEL_VEL_KD * wheel_forward_vel;
+    torque = app_clampf(torque, -s_balance_ctrl.output_limit,
+                        s_balance_ctrl.output_limit);
+    app_balance_send_wheels(torque);
+}
+
+static void app_run_leg_assist(float pitch, float pitch_rate)
+{
+    if (s_leg_assist_active == 0U) {
+        return;
+    }
+
+    s_leg_assist_divider++;
+    if (s_leg_assist_divider < APP_LEG_ASSIST_DIVIDER) {
+        return;
+    }
+    s_leg_assist_divider = 0U;
+
+    float offset =
+        leg_balance_controller_update(&s_leg_balance_ctrl,
+                                      pitch,
+                                      pitch_rate,
+                                      APP_LEG_ASSIST_DT_S);
+
+    g_app_cmd.dm[APP_DM_LEFT_JOINT].p =
+        s_leg_assist_left_base_rad + APP_LEG_ASSIST_LEFT_SIGN * offset;
+    g_app_cmd.dm[APP_DM_RIGHT_JOINT].p =
+        s_leg_assist_right_base_rad + APP_LEG_ASSIST_RIGHT_SIGN * offset;
+}
+
+static void app_leg_assist_restore(void)
+{
+    if (s_leg_assist_active == 0U) {
+        return;
+    }
+
+    g_app_cmd.dm[APP_DM_LEFT_JOINT].p = s_leg_assist_left_base_rad;
+    g_app_cmd.dm[APP_DM_RIGHT_JOINT].p = s_leg_assist_right_base_rad;
+    g_app_cmd.dm[APP_DM_LEFT_JOINT].kp = s_leg_assist_left_base_kp;
+    g_app_cmd.dm[APP_DM_LEFT_JOINT].kd = s_leg_assist_left_base_kd;
+    g_app_cmd.dm[APP_DM_RIGHT_JOINT].kp = s_leg_assist_right_base_kp;
+    g_app_cmd.dm[APP_DM_RIGHT_JOINT].kd = s_leg_assist_right_base_kd;
+    s_leg_assist_active = 0U;
+    s_leg_assist_divider = 0U;
+    leg_balance_controller_reset(&s_leg_balance_ctrl);
 }
 
 void app_background(void)
@@ -274,7 +555,67 @@ void app_background(void)
 
     app_run_imu_periodic();
     app_obs_update();
+    app_tune_autostart_task();
     g_app_status.background_ticks++;
+}
+
+static void app_tune_autostart_task(void)
+{
+    if (APP_TUNE_AUTOSTART == 0U) {
+        return;
+    }
+
+    uint32_t now = HAL_GetTick();
+
+    if (s_tune_stage == 0U) {
+        if ((now - s_tune_stage_ms) < APP_TUNE_POSE_DELAY_MS) {
+            return;
+        }
+        if (app_initial_pose_apply() != 0U) {
+            s_tune_stage = 1U;
+            s_tune_stage_ms = now;
+        }
+        return;
+    }
+
+    if (s_tune_stage == 1U) {
+        if (((now - s_tune_stage_ms) < APP_TUNE_START_DELAY_MS) ||
+            (g_app_obs.body.online == 0U)) {
+            return;
+        }
+        if (app_imu_zero_current() == 0U) {
+            return;
+        }
+
+        uint8_t ok;
+        if (APP_TUNE_USE_LEG_ASSIST != 0U) {
+            ok = app_balance_leg_assist_start(APP_TUNE_WHEEL_KP,
+                                              APP_TUNE_WHEEL_KI,
+                                              APP_TUNE_WHEEL_KD,
+                                              APP_TUNE_WHEEL_MAX,
+                                              APP_TUNE_LEG_KP,
+                                              APP_TUNE_LEG_KD,
+                                              APP_TUNE_LEG_BIAS,
+                                              APP_TUNE_LEG_MAX);
+        } else {
+            ok = app_balance_start(APP_TUNE_WHEEL_KP,
+                                   APP_TUNE_WHEEL_KI,
+                                   APP_TUNE_WHEEL_KD,
+                                   APP_TUNE_WHEEL_MAX);
+        }
+
+        if (ok != 0U) {
+            s_tune_stage = 2U;
+            s_tune_stage_ms = now;
+        }
+        return;
+    }
+
+    if ((s_tune_stage == 2U) && (APP_TUNE_RUN_MS > 0U) &&
+        ((now - s_tune_stage_ms) >= APP_TUNE_RUN_MS)) {
+        app_balance_stop();
+        s_tune_stage = 3U;
+    }
 }
 
 uint8_t app_imu_zero_current(void)
@@ -298,6 +639,192 @@ void app_imu_zero_clear(void)
     s_body_yaw_zero = 0.0f;
     s_body_zeroed = 0U;
     app_obs_update();
+}
+
+uint8_t app_leg_pose_solve_to_cmd(float left_x_mm, float left_y_mm,
+                                  float right_x_mm, float right_y_mm)
+{
+    leg_point_t left = {left_x_mm, left_y_mm};
+    leg_point_t right = {right_x_mm, right_y_mm};
+    leg_actuator_state_t left_actuator;
+    leg_actuator_state_t right_actuator;
+    leg_kinematics_result_t left_result;
+    leg_kinematics_result_t right_result;
+
+    leg_kinematics_status_t left_status =
+        leg_kinematics_inverse_to_actuator(LEG_SIDE_LEFT,
+                                           &left,
+                                           &left_actuator,
+                                           &left_result);
+    leg_kinematics_status_t right_status =
+        leg_kinematics_inverse_to_actuator(LEG_SIDE_RIGHT,
+                                           &right,
+                                           &right_actuator,
+                                           &right_result);
+
+    if ((left_status != LEG_KINEMATICS_OK) ||
+        (right_status != LEG_KINEMATICS_OK)) {
+        return 0U;
+    }
+
+    g_app_cmd.ft[APP_FT_LEFT].pos = left_actuator.ft_raw;
+    g_app_cmd.ft[APP_FT_LEFT].speed = APP_INITIAL_FT_SPEED;
+    g_app_cmd.ft[APP_FT_LEFT].acc = APP_INITIAL_FT_ACC;
+    g_app_cmd.ft[APP_FT_RIGHT].pos = right_actuator.ft_raw;
+    g_app_cmd.ft[APP_FT_RIGHT].speed = APP_INITIAL_FT_SPEED;
+    g_app_cmd.ft[APP_FT_RIGHT].acc = APP_INITIAL_FT_ACC;
+
+    app_set_dm_cmd(APP_DM_LEFT_JOINT,
+                   left_actuator.dm_rad, 0.0f,
+                   APP_INITIAL_LEFT_DM_KP,
+                   APP_INITIAL_LEFT_DM_KD,
+                   APP_INITIAL_LEFT_DM_T);
+    app_set_dm_cmd(APP_DM_RIGHT_JOINT,
+                   right_actuator.dm_rad, 0.0f,
+                   APP_INITIAL_RIGHT_DM_KP,
+                   APP_INITIAL_RIGHT_DM_KD,
+                   APP_INITIAL_RIGHT_DM_T);
+
+    return 1U;
+}
+
+uint8_t app_leg_pose_apply(float left_x_mm, float left_y_mm,
+                           float right_x_mm, float right_y_mm)
+{
+    if (app_leg_pose_solve_to_cmd(left_x_mm, left_y_mm,
+                                  right_x_mm, right_y_mm) == 0U) {
+        return 0U;
+    }
+
+    feetech_servo_enable(FEETECH_ID_LEFT);
+    feetech_servo_enable(FEETECH_ID_RIGHT);
+    feetech_servo_sync_set_pos(g_app_cmd.ft[APP_FT_LEFT].pos,
+                               g_app_cmd.ft[APP_FT_RIGHT].pos,
+                               g_app_cmd.ft[APP_FT_LEFT].speed,
+                               g_app_cmd.ft[APP_FT_LEFT].acc);
+
+    dm_motor_enable(&g_dm_motors[APP_DM_LEFT_JOINT]);
+    dm_motor_enable(&g_dm_motors[APP_DM_RIGHT_JOINT]);
+    g_app_cmd.dm_send_mask = (uint8_t)(g_app_cmd.dm_send_mask | APP_DM_JOINT_MASK);
+    g_app_cmd.mode = APP_MODE_LEG_HOLD;
+    return 1U;
+}
+
+uint8_t app_initial_pose_solve(void)
+{
+    return app_leg_pose_solve_to_cmd(APP_INITIAL_LEFT_X_MM,
+                                     APP_INITIAL_LEFT_Y_MM,
+                                     APP_INITIAL_RIGHT_X_MM,
+                                     APP_INITIAL_RIGHT_Y_MM);
+}
+
+uint8_t app_initial_pose_apply(void)
+{
+    return app_leg_pose_apply(APP_INITIAL_LEFT_X_MM,
+                              APP_INITIAL_LEFT_Y_MM,
+                              APP_INITIAL_RIGHT_X_MM,
+                              APP_INITIAL_RIGHT_Y_MM);
+}
+
+uint8_t app_balance_start(float pitch_kp, float pitch_ki,
+                          float pitch_kd, float max_torque)
+{
+    if (g_app_obs.body.online == 0U) {
+        return 0U;
+    }
+
+    if (s_body_zeroed == 0U) {
+        if (app_imu_zero_current() == 0U) {
+            return 0U;
+        }
+    }
+
+    balance_controller_config(&s_balance_ctrl,
+                              pitch_kp, pitch_ki, pitch_kd,
+                              app_clampf(max_torque, 0.0f, DM3510_T_MAX),
+                              APP_BALANCE_INTEGRAL_LIMIT);
+    balance_controller_set_response(&s_balance_ctrl,
+                                    APP_BALANCE_DEADBAND_DEG,
+                                    APP_BALANCE_MIN_TORQUE,
+                                    APP_BALANCE_TORQUE_SLEW);
+    s_wheel_send_divider = 0U;
+    s_wheel_enable_frames = APP_WHEEL_ENABLE_FRAMES;
+    s_wheel_zero_ticks = 0U;
+    s_wheel_zero_divider = 0U;
+    s_leg_assist_active = 0U;
+
+    app_set_dm_cmd(APP_DM_LEFT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    dm_motor_enable(&g_dm_motors[APP_DM_LEFT_WHEEL]);
+    dm_motor_enable(&g_dm_motors[APP_DM_RIGHT_WHEEL]);
+    g_app_cmd.dm_send_mask = (uint8_t)(g_app_cmd.dm_send_mask | APP_DM_WHEEL_MASK);
+    app_balance_send_wheels(0.0f);
+    g_app_cmd.mode = APP_MODE_BALANCE_TEST;
+    return 1U;
+}
+
+uint8_t app_balance_leg_assist_start(float pitch_kp, float pitch_ki,
+                                     float pitch_kd, float max_torque,
+                                     float leg_kp, float leg_kd,
+                                     float leg_bias_rad,
+                                     float leg_max_offset_rad)
+{
+    if (app_balance_start(pitch_kp, pitch_ki, pitch_kd, max_torque) == 0U) {
+        return 0U;
+    }
+
+    s_leg_assist_left_base_rad = g_app_cmd.dm[APP_DM_LEFT_JOINT].p;
+    s_leg_assist_right_base_rad = g_app_cmd.dm[APP_DM_RIGHT_JOINT].p;
+    s_leg_assist_left_base_kp = g_app_cmd.dm[APP_DM_LEFT_JOINT].kp;
+    s_leg_assist_left_base_kd = g_app_cmd.dm[APP_DM_LEFT_JOINT].kd;
+    s_leg_assist_right_base_kp = g_app_cmd.dm[APP_DM_RIGHT_JOINT].kp;
+    s_leg_assist_right_base_kd = g_app_cmd.dm[APP_DM_RIGHT_JOINT].kd;
+    s_leg_assist_divider = 0U;
+    s_leg_assist_active = 1U;
+    g_app_cmd.dm[APP_DM_LEFT_JOINT].kp = APP_LEG_ASSIST_LEFT_DM_KP;
+    g_app_cmd.dm[APP_DM_LEFT_JOINT].kd = APP_LEG_ASSIST_LEFT_DM_KD;
+    g_app_cmd.dm[APP_DM_RIGHT_JOINT].kp = APP_LEG_ASSIST_RIGHT_DM_KP;
+    g_app_cmd.dm[APP_DM_RIGHT_JOINT].kd = APP_LEG_ASSIST_RIGHT_DM_KD;
+    leg_balance_controller_config(&s_leg_balance_ctrl,
+                                  leg_kp,
+                                  leg_kd,
+                                  leg_bias_rad,
+                                  leg_max_offset_rad,
+                                  APP_LEG_ASSIST_SLEW_RAD_S);
+    g_app_cmd.mode = APP_MODE_BALANCE_LEG_ASSIST;
+    return 1U;
+}
+
+void app_balance_stop(void)
+{
+    s_wheel_enable_frames = 0U;
+    app_leg_assist_restore();
+    app_balance_send_wheels(0.0f);
+    s_wheel_zero_ticks = APP_WHEEL_ZERO_TICKS;
+    s_wheel_zero_divider = 0U;
+    g_app_cmd.dm_send_mask = (uint8_t)(g_app_cmd.dm_send_mask & (uint8_t)(~APP_DM_WHEEL_MASK));
+    app_set_dm_cmd(APP_DM_LEFT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    balance_controller_reset(&s_balance_ctrl);
+
+    if ((g_app_cmd.mode == APP_MODE_BALANCE_TEST) ||
+        (g_app_cmd.mode == APP_MODE_BALANCE_LEG_ASSIST)) {
+        g_app_cmd.mode = ((g_app_cmd.dm_send_mask & APP_DM_JOINT_MASK) != 0U) ?
+                         APP_MODE_LEG_HOLD : APP_MODE_IDLE;
+    }
+}
+
+void app_leg_hold_stop(void)
+{
+    g_app_cmd.dm_send_mask = (uint8_t)(g_app_cmd.dm_send_mask & (uint8_t)(~APP_DM_JOINT_MASK));
+    dm_motor_disable(&g_dm_motors[APP_DM_LEFT_JOINT]);
+    dm_motor_disable(&g_dm_motors[APP_DM_RIGHT_JOINT]);
+    feetech_servo_disable(FEETECH_ID_LEFT);
+    feetech_servo_disable(FEETECH_ID_RIGHT);
+
+    if (g_app_cmd.mode == APP_MODE_LEG_HOLD) {
+        g_app_cmd.mode = APP_MODE_IDLE;
+    }
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)

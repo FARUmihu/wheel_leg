@@ -1,0 +1,6 @@
+../user/controller/leg_balance_controller.c:3:14:leg_absf	2
+../user/controller/leg_balance_controller.c:8:14:leg_clampf	3
+../user/controller/leg_balance_controller.c:21:6:leg_balance_controller_init	2
+../user/controller/leg_balance_controller.c:35:6:leg_balance_controller_config	2
+../user/controller/leg_balance_controller.c:53:6:leg_balance_controller_reset	2
+../user/controller/leg_balance_controller.c:62:7:leg_balance_controller_update	4

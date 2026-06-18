@@ -12,6 +12,9 @@ typedef enum {
     APP_MODE_DM_MANUAL,
     APP_MODE_FT_MANUAL,
     APP_MODE_IMU_READ,
+    APP_MODE_LEG_HOLD,
+    APP_MODE_BALANCE_TEST,
+    APP_MODE_BALANCE_LEG_ASSIST,
 } app_mode_t;
 
 typedef enum {
@@ -134,5 +137,20 @@ void app_control_2khz(void);
 void app_background(void);
 uint8_t app_imu_zero_current(void);
 void app_imu_zero_clear(void);
+uint8_t app_leg_pose_solve_to_cmd(float left_x_mm, float left_y_mm,
+                                  float right_x_mm, float right_y_mm);
+uint8_t app_leg_pose_apply(float left_x_mm, float left_y_mm,
+                           float right_x_mm, float right_y_mm);
+uint8_t app_initial_pose_solve(void);
+uint8_t app_initial_pose_apply(void);
+uint8_t app_balance_start(float pitch_kp, float pitch_ki,
+                          float pitch_kd, float max_torque);
+uint8_t app_balance_leg_assist_start(float pitch_kp, float pitch_ki,
+                                     float pitch_kd, float max_torque,
+                                     float leg_kp, float leg_kd,
+                                     float leg_bias_rad,
+                                     float leg_max_offset_rad);
+void app_balance_stop(void);
+void app_leg_hold_stop(void);
 
 #endif /* APP_H */

@@ -32,7 +32,9 @@ user/app/app.o: ../user/app/app.c ../user/app/app.h \
  C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/imu/dm_imu.h \
  C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h \
  C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/feetech/feetech_servo.h \
- ../user/app/../algorithm/leg_kinematics/leg_kinematics.h
+ ../user/app/../algorithm/leg_kinematics/leg_kinematics.h \
+ ../user/app/../controller/balance_controller.h \
+ ../user/app/../controller/leg_balance_controller.h
 ../user/app/app.h:
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/bsp/bsp_can/bsp_can.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -68,3 +70,5 @@ C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/imu/dm_imu.h:
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/dm_motor/dm_motor.h:
 C:/Users/FMI/Documents/GitHub/wheel_leg/user/devices/feetech/feetech_servo.h:
 ../user/app/../algorithm/leg_kinematics/leg_kinematics.h:
+../user/app/../controller/balance_controller.h:
+../user/app/../controller/leg_balance_controller.h:

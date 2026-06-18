@@ -32,6 +32,8 @@
 "./user/algorithm/leg_kinematics/leg_kinematics.o"
 "./user/app/app.o"
 "./user/bsp/bsp_can/bsp_can.o"
+"./user/controller/balance_controller.o"
+"./user/controller/leg_balance_controller.o"
 "./user/devices/dm_motor/dm_motor.o"
 "./user/devices/feetech/feetech_servo.o"
 "./user/devices/imu/dm_imu.o"

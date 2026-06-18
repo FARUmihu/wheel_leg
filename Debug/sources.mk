@@ -30,6 +30,7 @@ user/algorithm/PID \
 user/algorithm/leg_kinematics \
 user/app \
 user/bsp/bsp_can \
+user/controller \
 user/devices/dm_motor \
 user/devices/feetech \
 user/devices/imu \
