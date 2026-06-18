@@ -55,6 +55,7 @@ extern volatile uint16_t g_imu_can_id;
  *         主动模式下 IMU 按固定频率自动推送数据，无需轮询。
  */
 void imu_init(void);
+void imu_activate(void);
 
 /**
  * @brief  请求 IMU 立即推送一次欧拉角 + 陀螺仪数据

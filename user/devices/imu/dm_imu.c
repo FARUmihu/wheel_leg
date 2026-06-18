@@ -101,6 +101,11 @@ void imu_init(void)
     }
 
     /* 设置主动推送模式，IMU 自动按内部频率推送数据 */
+    imu_activate();
+}
+
+void imu_activate(void)
+{
     imu_send_cmd(11, 1, 1);   /* CHANGE_ACTIVE = 11, write, value = 1 */
 }
 

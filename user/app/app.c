@@ -15,6 +15,14 @@ volatile app_cmd_t g_app_cmd;
 volatile app_obs_t g_app_obs;
 
 static uint32_t s_imu_request_ms;
+static uint32_t s_imu_activate_ms;
+static uint32_t s_imu_online_since_ms;
+static uint32_t s_startup_safe_ms;
+static uint32_t s_startup_disable_ms;
+static uint32_t s_joint_enable_retry_start_ms;
+static uint32_t s_joint_enable_retry_ms;
+static uint32_t s_ft_pose_refresh_start_ms;
+static uint32_t s_ft_pose_refresh_ms;
 static uint8_t s_joint_hold_divider;
 static float s_body_pitch_zero;
 static float s_body_roll_zero;
@@ -74,7 +82,7 @@ static uint8_t s_balance_dbg_log_divider;
 #define APP_INITIAL_RIGHT_DM_T     4.0f
 #define APP_JOINT_HOLD_DIVIDER     2U
 #define APP_WHEEL_SEND_DIVIDER     5U
-#define APP_WHEEL_ENABLE_FRAMES   20U
+#define APP_WHEEL_ENABLE_FRAMES  100U
 #define APP_LEG_ASSIST_DIVIDER    40U
 #define APP_LEG_ASSIST_DT_S       (APP_CONTROL_DT_S * (float)APP_LEG_ASSIST_DIVIDER)
 #define APP_LEG_ASSIST_SLEW_RAD_S  0.10f
@@ -106,8 +114,8 @@ static uint8_t s_balance_dbg_log_divider;
 
 #define APP_TUNE_AUTOSTART          1U
 #define APP_TUNE_USE_LEG_ASSIST     0U
-#define APP_TUNE_POSE_DELAY_MS   1500U
-#define APP_TUNE_START_DELAY_MS  4500U
+#define APP_TUNE_POSE_DELAY_MS   3000U
+#define APP_TUNE_START_DELAY_MS  8000U
 #define APP_TUNE_RUN_MS             0U
 #define APP_TUNE_WHEEL_KP          0.350f
 #define APP_TUNE_WHEEL_KI          0.001f
@@ -117,6 +125,18 @@ static uint8_t s_balance_dbg_log_divider;
 #define APP_TUNE_LEG_KD           (-0.0015f)
 #define APP_TUNE_LEG_BIAS         (-0.035f)
 #define APP_TUNE_LEG_MAX           0.10f
+#define APP_COLD_START_HOLD_MS   3000U
+#define APP_STARTUP_DISABLE_RETRY_MS 100U
+#define APP_IMU_ACTIVATE_RETRY_MS  200U
+#define APP_IMU_ACTIVE_STABLE_MS  1000U
+#define APP_DM_ACTIVE_TIMEOUT_MS   300U
+#define APP_AUTOSTART_MAX_GYRO_RAD_S 0.8f
+#define APP_AUTOSTART_MAX_PITCH_DEG 25.0f
+#define APP_AUTOSTART_MAX_ROLL_DEG  35.0f
+#define APP_JOINT_ENABLE_RETRY_MS   100U
+#define APP_JOINT_ENABLE_RETRY_WINDOW_MS 2000U
+#define APP_FT_POSE_REFRESH_MS      200U
+#define APP_FT_POSE_REFRESH_WINDOW_MS 4000U
 
 static void app_run_joint_hold(void);
 static void app_run_balance(void);
@@ -124,6 +144,13 @@ static void app_run_wheel_zero_stop(void);
 static void app_run_leg_assist(float pitch, float pitch_rate);
 static void app_leg_assist_restore(void);
 static void app_tune_autostart_task(void);
+static void app_run_startup_safe(void);
+static void app_run_initial_pose_retries(void);
+static uint8_t app_startup_ready(void);
+static float app_absf(float x);
+static uint8_t app_body_still(void);
+static uint8_t app_body_level_enough(void);
+static uint8_t app_dm_mask_online(uint8_t mask, uint32_t timeout_ms);
 
 typedef uint8_t (*app_debug_u8_void_fn_t)(void);
 typedef uint8_t (*app_debug_balance_start_fn_t)(float, float, float, float);
@@ -151,6 +178,124 @@ static void app_keep_debug_symbols(void)
     s_debug_balance_leg_assist_start = app_balance_leg_assist_start;
     s_debug_balance_stop = app_balance_stop;
     s_debug_leg_hold_stop = app_leg_hold_stop;
+}
+
+static uint8_t app_startup_ready(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if ((now - s_startup_safe_ms) < APP_COLD_START_HOLD_MS) {
+        return 0U;
+    }
+
+    if (imu_is_online(100U) == 0U) {
+        return 0U;
+    }
+
+    if (s_imu_online_since_ms == 0U) {
+        return 0U;
+    }
+
+    return ((now - s_imu_online_since_ms) >= APP_IMU_ACTIVE_STABLE_MS) ? 1U : 0U;
+}
+
+static uint8_t app_body_still(void)
+{
+    for (uint8_t i = 0U; i < 3U; i++) {
+        if (app_absf(g_app_obs.body.gyro[i]) > APP_AUTOSTART_MAX_GYRO_RAD_S) {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+static uint8_t app_body_level_enough(void)
+{
+    if (app_absf(g_app_obs.imu.pitch) > APP_AUTOSTART_MAX_PITCH_DEG) {
+        return 0U;
+    }
+
+    if (app_absf(g_app_obs.imu.roll) > APP_AUTOSTART_MAX_ROLL_DEG) {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t app_dm_mask_online(uint8_t mask, uint32_t timeout_ms)
+{
+    for (uint8_t i = 0U; i < APP_DM_COUNT; i++) {
+        uint8_t bit = (uint8_t)(1U << i);
+
+        if ((mask & bit) == 0U) {
+            continue;
+        }
+
+        if (dm_motor_is_online(&g_dm_motors[i], timeout_ms) == 0U) {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+static void app_run_startup_safe(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if (imu_is_online(100U) != 0U) {
+        if (s_imu_online_since_ms == 0U) {
+            s_imu_online_since_ms = now;
+        }
+    } else {
+        s_imu_online_since_ms = 0U;
+        if ((now - s_imu_activate_ms) >= APP_IMU_ACTIVATE_RETRY_MS) {
+            imu_activate();
+            s_imu_activate_ms = now;
+        }
+    }
+
+    if ((now - s_startup_safe_ms) >= APP_COLD_START_HOLD_MS) {
+        return;
+    }
+
+    if ((now - s_startup_disable_ms) < APP_STARTUP_DISABLE_RETRY_MS) {
+        return;
+    }
+
+    dm_motor_disable(&g_dm_motors[APP_DM_LEFT_JOINT]);
+    dm_motor_disable(&g_dm_motors[APP_DM_RIGHT_JOINT]);
+    dm_motor_disable(&g_dm_motors[APP_DM_LEFT_WHEEL]);
+    dm_motor_disable(&g_dm_motors[APP_DM_RIGHT_WHEEL]);
+    feetech_servo_disable(FEETECH_ID_LEFT);
+    feetech_servo_disable(FEETECH_ID_RIGHT);
+    s_startup_disable_ms = now;
+}
+
+static void app_run_initial_pose_retries(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if ((s_joint_enable_retry_start_ms != 0U) &&
+        ((now - s_joint_enable_retry_start_ms) < APP_JOINT_ENABLE_RETRY_WINDOW_MS) &&
+        ((now - s_joint_enable_retry_ms) >= APP_JOINT_ENABLE_RETRY_MS)) {
+        dm_motor_enable(&g_dm_motors[APP_DM_LEFT_JOINT]);
+        dm_motor_enable(&g_dm_motors[APP_DM_RIGHT_JOINT]);
+        s_joint_enable_retry_ms = now;
+    }
+
+    if ((s_ft_pose_refresh_start_ms != 0U) &&
+        ((now - s_ft_pose_refresh_start_ms) < APP_FT_POSE_REFRESH_WINDOW_MS) &&
+        ((now - s_ft_pose_refresh_ms) >= APP_FT_POSE_REFRESH_MS)) {
+        feetech_servo_enable(FEETECH_ID_LEFT);
+        feetech_servo_enable(FEETECH_ID_RIGHT);
+        feetech_servo_sync_set_pos(g_app_cmd.ft[APP_FT_LEFT].pos,
+                                   g_app_cmd.ft[APP_FT_RIGHT].pos,
+                                   g_app_cmd.ft[APP_FT_LEFT].speed,
+                                   g_app_cmd.ft[APP_FT_LEFT].acc);
+        s_ft_pose_refresh_ms = now;
+    }
 }
 
 static void app_cmd_set_defaults(void)
@@ -410,7 +555,16 @@ void app_init(void)
     g_app_status.control_ticks = 0;
     g_app_status.background_ticks = 0;
     g_app_status.initialized = 1;
-    s_imu_request_ms = HAL_GetTick();
+    uint32_t now = HAL_GetTick();
+    s_imu_request_ms = now;
+    s_imu_activate_ms = now;
+    s_imu_online_since_ms = 0U;
+    s_startup_safe_ms = now;
+    s_startup_disable_ms = 0U;
+    s_joint_enable_retry_start_ms = 0U;
+    s_joint_enable_retry_ms = 0U;
+    s_ft_pose_refresh_start_ms = 0U;
+    s_ft_pose_refresh_ms = 0U;
     s_joint_hold_divider = 0U;
     s_wheel_send_divider = 0U;
     s_wheel_enable_frames = 0U;
@@ -525,6 +679,12 @@ static void app_run_balance(void)
         return;
     }
 
+    if (app_dm_mask_online(APP_DM_WHEEL_MASK, APP_DM_ACTIVE_TIMEOUT_MS) == 0U) {
+        balance_controller_reset(&s_balance_ctrl);
+        app_balance_send_wheels(0.0f);
+        return;
+    }
+
     float pitch = app_wrap_deg(g_imu.pitch - s_body_pitch_zero);
     float pitch_rate = g_imu.gyro[1];
     float pitch_pred = app_predict_pitch_deg(pitch, pitch_rate);
@@ -623,6 +783,8 @@ void app_background(void)
         return;
     }
 
+    app_run_startup_safe();
+
     switch (g_app_cmd.mode) {
         case APP_MODE_FT_MANUAL:
             app_run_ft_manual();
@@ -635,6 +797,7 @@ void app_background(void)
     }
 
     app_run_imu_periodic();
+    app_run_initial_pose_retries();
     app_obs_update();
     app_tune_autostart_task();
     g_app_status.background_ticks++;
@@ -649,7 +812,10 @@ static void app_tune_autostart_task(void)
     uint32_t now = HAL_GetTick();
 
     if (s_tune_stage == 0U) {
-        if ((now - s_tune_stage_ms) < APP_TUNE_POSE_DELAY_MS) {
+        if (((now - s_tune_stage_ms) < APP_TUNE_POSE_DELAY_MS) ||
+            (app_startup_ready() == 0U) ||
+            (app_body_level_enough() == 0U) ||
+            (app_body_still() == 0U)) {
             return;
         }
         if (app_initial_pose_apply() != 0U) {
@@ -661,7 +827,10 @@ static void app_tune_autostart_task(void)
 
     if (s_tune_stage == 1U) {
         if (((now - s_tune_stage_ms) < APP_TUNE_START_DELAY_MS) ||
-            (g_app_obs.body.online == 0U)) {
+            (g_app_obs.body.online == 0U) ||
+            (app_body_level_enough() == 0U) ||
+            (app_body_still() == 0U) ||
+            (app_dm_mask_online(APP_DM_JOINT_MASK, APP_DM_ACTIVE_TIMEOUT_MS) == 0U)) {
             return;
         }
         if (app_imu_zero_current() == 0U) {
@@ -783,9 +952,13 @@ uint8_t app_leg_pose_apply(float left_x_mm, float left_y_mm,
                                g_app_cmd.ft[APP_FT_RIGHT].pos,
                                g_app_cmd.ft[APP_FT_LEFT].speed,
                                g_app_cmd.ft[APP_FT_LEFT].acc);
+    s_ft_pose_refresh_start_ms = HAL_GetTick();
+    s_ft_pose_refresh_ms = s_ft_pose_refresh_start_ms;
 
     dm_motor_enable(&g_dm_motors[APP_DM_LEFT_JOINT]);
     dm_motor_enable(&g_dm_motors[APP_DM_RIGHT_JOINT]);
+    s_joint_enable_retry_start_ms = HAL_GetTick();
+    s_joint_enable_retry_ms = s_joint_enable_retry_start_ms;
     g_app_cmd.dm_send_mask = (uint8_t)(g_app_cmd.dm_send_mask | APP_DM_JOINT_MASK);
     g_app_cmd.mode = APP_MODE_LEG_HOLD;
     return 1U;

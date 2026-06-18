@@ -5,5 +5,6 @@
 ../user/devices/imu/dm_imu.c:47:13:imu_decode_euler	16	static
 ../user/devices/imu/dm_imu.c:58:6:bsp_can1_rx_callback	32	static
 ../user/devices/imu/dm_imu.c:86:6:imu_init	16	static
-../user/devices/imu/dm_imu.c:107:6:imu_request_data	8	static
-../user/devices/imu/dm_imu.c:115:9:imu_is_online	16	static
+../user/devices/imu/dm_imu.c:107:6:imu_activate	8	static
+../user/devices/imu/dm_imu.c:112:6:imu_request_data	8	static
+../user/devices/imu/dm_imu.c:120:9:imu_is_online	16	static

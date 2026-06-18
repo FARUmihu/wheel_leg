@@ -38,6 +38,7 @@ void dm_motor_init(dm_motor_t *m, CAN_HandleTypeDef *hcan, uint16_t id,
     m->torque       = 0.0f;
     m->temp_mos     = 0;
     m->temp_rotor   = 0;
+    m->last_update_ms = 0U;
 }
 
 /* ── 特殊指令帧（DM4310 / DM3510 通用）────────────────────────── */
@@ -132,6 +133,7 @@ static void dm_motor_decode(dm_motor_t *m, const uint8_t *data)
 
     m->temp_mos   = (int8_t)data[6];
     m->temp_rotor = (int8_t)data[7];
+    m->last_update_ms = HAL_GetTick();
 }
 
 /* ── CAN RX 弱函数覆盖 ─────────────────────────────────────────── */
@@ -158,4 +160,13 @@ static void dm_rx_dispatch(CAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data, 
 void bsp_can2_rx_callback(uint32_t id, uint8_t *data, uint8_t len)
 {
     dm_rx_dispatch(&hcan2, id, data, len);
+}
+
+uint8_t dm_motor_is_online(const dm_motor_t *m, uint32_t timeout_ms)
+{
+    if (m->last_update_ms == 0U) {
+        return 0U;
+    }
+
+    return ((HAL_GetTick() - m->last_update_ms) <= timeout_ms) ? 1U : 0U;
 }

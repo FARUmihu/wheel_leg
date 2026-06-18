@@ -62,6 +62,7 @@ typedef struct {
     float   torque;            /* 力矩 (N·m)    */
     int8_t  temp_mos;          /* MOS 温度 (°C) */
     int8_t  temp_rotor;        /* 线圈温度 (°C) */
+    uint32_t last_update_ms;
 } dm_motor_t;
 
 /* ================================================================
@@ -114,5 +115,6 @@ void dm_motor_set_zero(dm_motor_t *m);
  */
 uint8_t dm_motor_send_mit(dm_motor_t *m, float p_des, float v_des,
                           float kp, float kd, float t_ff);
+uint8_t dm_motor_is_online(const dm_motor_t *m, uint32_t timeout_ms);
 
 #endif /* DM_MOTOR_H */
