@@ -48,6 +48,8 @@ static uint8_t s_tune_stage;
 static uint32_t s_tune_stage_ms;
 static float s_remote_vx_cmd_mm_s;
 static float s_remote_wz_cmd_mrad_s;
+static float s_balance_wheel_pos_mm;
+static float s_balance_hold_pos_mm;
 volatile float g_balance_dbg_pitch_raw;
 volatile float g_balance_dbg_pitch_pred;
 volatile float g_balance_dbg_pitch_rate;
@@ -59,6 +61,11 @@ volatile float g_remote_dbg_vx_cmd_mm_s;
 volatile float g_remote_dbg_wz_cmd_mrad_s;
 volatile float g_remote_dbg_target_pitch_deg;
 volatile float g_remote_dbg_turn_torque;
+volatile float g_balance_dbg_speed_pitch_deg;
+volatile float g_balance_dbg_position_pitch_deg;
+volatile float g_balance_dbg_wheel_pos_mm;
+volatile float g_balance_dbg_hold_pos_mm;
+volatile float g_balance_dbg_wheel_vx_mm_s;
 
 typedef struct {
     uint32_t tick;
@@ -89,7 +96,12 @@ static uint8_t app_startup_ready(void);
 static float app_absf(float x);
 static float app_slew_float(float current, float target, float rate, float dt_s);
 static void app_remote_motion_reset(void);
-static void app_remote_motion_update(float *target_pitch_deg, float *turn_torque);
+static void app_balance_outer_reset(void);
+static void app_remote_motion_update(uint8_t remote_enabled,
+                                     float *turn_torque);
+static float app_balance_outer_update(uint8_t outer_enabled,
+                                      float wheel_forward_vel_rad_s,
+                                      float dt_s);
 static uint8_t app_body_still(void);
 static uint8_t app_body_level_enough(void);
 static uint8_t app_dm_mask_online(uint8_t mask, uint32_t timeout_ms);
@@ -323,12 +335,24 @@ static void app_remote_motion_reset(void)
     g_remote_dbg_turn_torque = 0.0f;
 }
 
-static void app_remote_motion_update(float *target_pitch_deg, float *turn_torque)
+static void app_balance_outer_reset(void)
+{
+    s_balance_wheel_pos_mm = 0.0f;
+    s_balance_hold_pos_mm = 0.0f;
+    g_balance_dbg_speed_pitch_deg = 0.0f;
+    g_balance_dbg_position_pitch_deg = 0.0f;
+    g_balance_dbg_wheel_pos_mm = 0.0f;
+    g_balance_dbg_hold_pos_mm = 0.0f;
+    g_balance_dbg_wheel_vx_mm_s = 0.0f;
+}
+
+static void app_remote_motion_update(uint8_t remote_enabled,
+                                     float *turn_torque)
 {
     float target_vx = 0.0f;
     float target_wz = 0.0f;
 
-    if (g_app_remote_cmd.online != 0U) {
+    if ((remote_enabled != 0U) && (g_app_remote_cmd.online != 0U)) {
         target_vx = (float)app_remote_get_vx_mm_s();
         target_wz = (float)app_remote_get_wz_mrad_s();
     }
@@ -351,33 +375,69 @@ static void app_remote_motion_update(float *target_pitch_deg, float *turn_torque
                        APP_REMOTE_WZ_SLEW_MRAD_S2,
                        APP_BALANCE_DT_S);
 
-    float pitch =
-        APP_REMOTE_TARGET_PITCH_SIGN *
-        (s_remote_vx_cmd_mm_s / (float)APP_REMOTE_MAX_VX_MM_S) *
-        APP_REMOTE_TARGET_PITCH_MAX_DEG;
     float turn =
         APP_REMOTE_TURN_TORQUE_SIGN *
         (s_remote_wz_cmd_mrad_s / (float)APP_REMOTE_MAX_WZ_MRAD_S) *
         APP_REMOTE_TURN_TORQUE_MAX;
 
-    pitch = app_clampf(pitch,
-                       -APP_REMOTE_TARGET_PITCH_MAX_DEG,
-                       APP_REMOTE_TARGET_PITCH_MAX_DEG);
     turn = app_clampf(turn,
                       -APP_REMOTE_TURN_TORQUE_MAX,
                       APP_REMOTE_TURN_TORQUE_MAX);
 
     g_remote_dbg_vx_cmd_mm_s = s_remote_vx_cmd_mm_s;
     g_remote_dbg_wz_cmd_mrad_s = s_remote_wz_cmd_mrad_s;
-    g_remote_dbg_target_pitch_deg = pitch;
     g_remote_dbg_turn_torque = turn;
 
-    if (target_pitch_deg != 0) {
-        *target_pitch_deg = pitch;
-    }
     if (turn_torque != 0) {
         *turn_torque = turn;
     }
+}
+
+static float app_balance_outer_update(uint8_t outer_enabled,
+                                      float wheel_forward_vel_rad_s,
+                                      float dt_s)
+{
+    float wheel_vx_mm_s = wheel_forward_vel_rad_s * APP_WHEEL_RADIUS_MM;
+    s_balance_wheel_pos_mm += wheel_vx_mm_s * dt_s;
+
+    float speed_pitch = 0.0f;
+    float position_pitch = 0.0f;
+
+    if (outer_enabled == 0U) {
+        s_balance_hold_pos_mm = s_balance_wheel_pos_mm;
+    } else {
+        float speed_error = s_remote_vx_cmd_mm_s - wheel_vx_mm_s;
+        speed_pitch =
+            app_clampf(APP_SPEED_OUTER_KP_DEG_PER_MM_S * speed_error,
+                       -APP_SPEED_OUTER_MAX_DEG,
+                       APP_SPEED_OUTER_MAX_DEG);
+
+        if (app_absf(s_remote_vx_cmd_mm_s) > APP_POSITION_HOLD_RELEASE_VX_MM_S) {
+            s_balance_hold_pos_mm = s_balance_wheel_pos_mm;
+        } else {
+            float position_error = s_balance_hold_pos_mm - s_balance_wheel_pos_mm;
+            position_pitch =
+                app_clampf(APP_POSITION_HOLD_KP_DEG_PER_MM * position_error,
+                           -APP_POSITION_HOLD_MAX_DEG,
+                           APP_POSITION_HOLD_MAX_DEG);
+        }
+    }
+
+    float target_pitch =
+        APP_BALANCE_PITCH_TRIM_DEG + speed_pitch + position_pitch;
+    target_pitch =
+        app_clampf(target_pitch,
+                   -APP_TARGET_PITCH_TOTAL_MAX_DEG,
+                   APP_TARGET_PITCH_TOTAL_MAX_DEG);
+
+    g_balance_dbg_speed_pitch_deg = speed_pitch;
+    g_balance_dbg_position_pitch_deg = position_pitch;
+    g_balance_dbg_wheel_pos_mm = s_balance_wheel_pos_mm;
+    g_balance_dbg_hold_pos_mm = s_balance_hold_pos_mm;
+    g_balance_dbg_wheel_vx_mm_s = wheel_vx_mm_s;
+    g_remote_dbg_target_pitch_deg = target_pitch;
+
+    return target_pitch;
 }
 
 static float app_predict_pitch_deg(float pitch_deg, float pitch_rate_rad_s)
@@ -602,6 +662,7 @@ void app_init(void)
     s_tune_stage = 0U;
     s_tune_stage_ms = HAL_GetTick();
     app_remote_motion_reset();
+    app_balance_outer_reset();
     balance_controller_init(&s_balance_ctrl);
     leg_balance_controller_init(&s_leg_balance_ctrl);
     app_keep_debug_symbols();
@@ -697,6 +758,7 @@ static void app_run_balance(void)
     if ((imu_is_online(100U) == 0U) || (s_body_zeroed == 0U)) {
         balance_controller_reset(&s_balance_ctrl);
         app_remote_motion_reset();
+        app_balance_outer_reset();
         app_balance_send_wheels(0.0f);
         return;
     }
@@ -705,6 +767,7 @@ static void app_run_balance(void)
         dm_motor_enable(&g_dm_motors[APP_DM_LEFT_WHEEL]);
         dm_motor_enable(&g_dm_motors[APP_DM_RIGHT_WHEEL]);
         app_remote_motion_reset();
+        app_balance_outer_reset();
         app_balance_send_wheels(0.0f);
         s_wheel_enable_frames--;
         return;
@@ -713,6 +776,7 @@ static void app_run_balance(void)
     if (app_dm_mask_online(APP_DM_WHEEL_MASK, APP_DM_ACTIVE_TIMEOUT_MS) == 0U) {
         balance_controller_reset(&s_balance_ctrl);
         app_remote_motion_reset();
+        app_balance_outer_reset();
         app_balance_send_wheels(0.0f);
         return;
     }
@@ -734,16 +798,20 @@ static void app_run_balance(void)
         APP_BALANCE_WHEEL_STATE_SIGN *
         0.5f * (g_dm_motors[APP_DM_LEFT_WHEEL].vel_filtered -
                 g_dm_motors[APP_DM_RIGHT_WHEEL].vel_filtered);
-    float remote_target_pitch = 0.0f;
     float remote_turn_torque = 0.0f;
+    uint8_t outer_enabled =
+        (app_absf(pitch_pred) <= APP_REMOTE_RECOVERY_TILT_DEG) ? 1U : 0U;
 
-    app_remote_motion_update(&remote_target_pitch, &remote_turn_torque);
+    app_remote_motion_update(outer_enabled, &remote_turn_torque);
+    float target_pitch =
+        app_balance_outer_update(outer_enabled,
+                                 wheel_forward_vel,
+                                 APP_BALANCE_DT_S);
 
     float torque = balance_controller_update(&s_balance_ctrl,
-                                             remote_target_pitch,
+                                             target_pitch,
                                              pitch_pred,
                                              pitch_rate,
-                                             wheel_forward_vel,
                                              APP_BALANCE_DT_S);
     torque = app_clampf(torque, -s_balance_ctrl.output_limit,
                         s_balance_ctrl.output_limit);
@@ -1039,17 +1107,13 @@ uint8_t app_balance_start(float pitch_kp, float pitch_ki,
                                     APP_BALANCE_DEADBAND_DEG,
                                     APP_BALANCE_MIN_TORQUE,
                                     APP_BALANCE_TORQUE_SLEW);
-    balance_controller_set_wheel_response(&s_balance_ctrl,
-                                          APP_BALANCE_WHEEL_POS_KP,
-                                          APP_BALANCE_WHEEL_VEL_KD,
-                                          APP_BALANCE_WHEEL_POS_LIMIT,
-                                          APP_BALANCE_WHEEL_POS_LEAK);
     s_wheel_send_divider = 0U;
     s_wheel_enable_frames = APP_WHEEL_ENABLE_FRAMES;
     s_wheel_zero_ticks = 0U;
     s_wheel_zero_divider = 0U;
     s_leg_assist_active = 0U;
     app_remote_motion_reset();
+    app_balance_outer_reset();
 
     app_set_dm_cmd(APP_DM_LEFT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
@@ -1105,6 +1169,7 @@ void app_balance_stop(void)
     app_set_dm_cmd(APP_DM_RIGHT_WHEEL, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     balance_controller_reset(&s_balance_ctrl);
     app_remote_motion_reset();
+    app_balance_outer_reset();
 
     if ((g_app_cmd.mode == APP_MODE_BALANCE_TEST) ||
         (g_app_cmd.mode == APP_MODE_BALANCE_LEG_ASSIST)) {

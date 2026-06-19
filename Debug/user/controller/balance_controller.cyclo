@@ -3,8 +3,7 @@
 ../user/controller/balance_controller.c:25:14:balance_apply_deadband	3
 ../user/controller/balance_controller.c:38:14:balance_shape_tilt_error	3
 ../user/controller/balance_controller.c:55:6:balance_controller_init	2
-../user/controller/balance_controller.c:78:6:balance_controller_config	2
-../user/controller/balance_controller.c:95:6:balance_controller_set_response	2
-../user/controller/balance_controller.c:109:6:balance_controller_set_wheel_response	2
-../user/controller/balance_controller.c:125:6:balance_controller_reset	2
-../user/controller/balance_controller.c:136:7:balance_controller_update	12
+../user/controller/balance_controller.c:73:6:balance_controller_config	2
+../user/controller/balance_controller.c:90:6:balance_controller_set_response	2
+../user/controller/balance_controller.c:104:6:balance_controller_reset	2
+../user/controller/balance_controller.c:114:7:balance_controller_update	9
