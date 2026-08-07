@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>手势指令演示</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="stage" aria-label="摄像头画面">
+      <video id="camera" class="camera" autoplay muted playsinline></video>
+      <canvas id="overlay" class="overlay"></canvas>
+      <div id="statusPill" class="status-pill">未启动</div>
+    </section>
+
+    <section class="control-panel" aria-label="识别结果">
+      <div>
+        <p class="eyebrow">Gesture Demo</p>
+        <h1>手势指令演示</h1>
+      </div>
+
+      <div id="commandCard" class="command-readout idle">
+        <span class="label">当前指令</span>
+        <strong id="commandText">待机</strong>
+      </div>
+
+      <dl class="telemetry">
+        <div>
+          <dt>识别手势</dt>
+          <dd id="gestureText">--</dd>
+        </div>
+        <div>
+          <dt>置信度</dt>
+          <dd id="scoreText">--</dd>
+        </div>
+        <div>
+          <dt>映射结果</dt>
+          <dd id="mappingText">V -> 前进 / 五指张开 -> 倒退 / 握拳 -> 停止 / 大拇指 -> 右转 / 小拇指 -> 左转</dd>
+        </div>
+      </dl>
+
+      <div class="actions">
+        <button id="startButton" type="button">开始摄像头</button>
+        <button id="stopButton" type="button" class="secondary" disabled>停止</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
